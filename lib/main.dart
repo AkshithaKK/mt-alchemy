@@ -1,9 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 
@@ -18,41 +15,12 @@ Future<void> main() async {
 }
 
 
-const Color navy = Color(0xFF142B55);
-const Color blue = Color(0xFF244A86);
-const Color yellow = Color(0xFFFFD66B);
-const Color purple = Color(0xFF7555B7);
-const Color pageBg = Color(0xFFF6F7FB);
-
-
-/// Writes a prototype activity record. Firestore rules restrict who may create
-/// each action; server-side logging is recommended for tamper-resistant audits.
-Future<void> writeActivityLog({
-  required String action,
-  required String targetUid,
-  required String targetName,
-  required String targetEmail,
-  String? oldValue,
-  String? newValue,
-}) async {
-  final actor = FirebaseAuth.instance.currentUser;
-  if (actor == null) return;
-  try {
-    await FirebaseFirestore.instance.collection('activity_logs').add({
-      'action': action,
-      'actorUid': actor.uid,
-      'actorEmail': actor.email ?? '',
-      'targetUid': targetUid,
-      'targetName': targetName,
-      'targetEmail': targetEmail,
-      if (oldValue != null) 'oldValue': oldValue,
-      if (newValue != null) 'newValue': newValue,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-  } catch (_) {
-// Activity logging must not break registration or account management.
-  }
-}
+const Color navy = Color(0xFF0B1426);
+const Color blue = Color(0xFF172B4D);
+const Color yellow = Color(0xFFD8B56D);
+// Legacy accent name retained so existing widgets keep working; now uses the brand gold.
+const Color purple = Color(0xFFD8B56D);
+const Color pageBg = Color(0xFFF4F2ED);
 
 class MTAlchemyApp extends StatelessWidget {
   const MTAlchemyApp({super.key});
@@ -65,12 +33,50 @@ class MTAlchemyApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         scaffoldBackgroundColor: pageBg,
-        colorScheme: ColorScheme.fromSeed(seedColor: navy),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: yellow,
+          brightness: Brightness.light,
+          primary: navy,
+          secondary: yellow,
+          surface: Colors.white,
+        ),
         fontFamily: 'Arial',
+        cardTheme: CardThemeData(
+          color: Colors.white,
+          elevation: 2,
+          shadowColor: navy.withValues(alpha: 0.08),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: const BorderSide(color: Color(0xFFE8E2D5)),
+          ),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: const Color(0xFFFAF9F6),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color(0xFFD8D3C8)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color(0xFFD8D3C8)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: navy, width: 1.5),
+          ),
+        ),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.white,
-          foregroundColor: navy,
+          backgroundColor: navy,
+          foregroundColor: Colors.white,
           elevation: 0,
+          surfaceTintColor: Colors.transparent,
+          titleTextStyle: const TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.4,
+          ),
         ),
         filledButtonTheme: FilledButtonThemeData(
           style: ButtonStyle(
@@ -116,16 +122,14 @@ class Product {
   final String price;
   final IconData icon;
   final Color color;
-  final String type;
 
   const Product(
       this.title,
       this.description,
       this.price,
       this.icon,
-      this.color, {
-        this.type = 'Digital',
-      });
+      this.color,
+      );
 }
 
 const List<Course> courses = [
@@ -192,211 +196,11 @@ class MainWebsite extends StatefulWidget {
 
 class _MainWebsiteState extends State<MainWebsite> {
   String currentPage = 'Home';
-  String? latestOrderId;
-  String? signedInRole;
-  String? signedInName;
+  String signedInRole = 'Individual';
   final List<Product> cart = [];
-  bool _isRestoringSession = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _restoreSession();
-  }
-
-  Future<void> _restoreSession() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      if (mounted) setState(() => _isRestoringSession = false);
-      return;
-    }
-
-    try {
-      final profile = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-      final data = profile.data();
-      final role = (data?['role'] as String?)?.trim() ?? '';
-      final status = (data?['status'] ?? 'Active').toString();
-      final profileName = (data?['name'] as String?)?.trim() ?? '';
-
-      if (!mounted) return;
-
-      const validRoles = ['Super Admin', 'Individual', 'Employer', 'Trainer'];
-      if (!profile.exists || !validRoles.contains(role) || status == 'Suspended') {
-        await FirebaseAuth.instance.signOut();
-        if (!mounted) return;
-        setState(() {
-          signedInRole = null;
-          signedInName = null;
-          currentPage = 'Home';
-          _isRestoringSession = false;
-        });
-        return;
-      }
-
-      final targetPage = _dashboardForRole(role);
-      setState(() {
-        signedInRole = role;
-        signedInName = profileName.isNotEmpty ? profileName : (user.email ?? 'Account');
-        currentPage = targetPage;
-        _isRestoringSession = false;
-      });
-      await _loadCart();
-    } catch (_) {
-// Keep the Firebase session intact if profile loading temporarily fails.
-// The user can retry by refreshing after the connection is restored.
-      if (mounted) setState(() => _isRestoringSession = false);
-    }
-  }
-
-  String _dashboardForRole(String role) {
-    switch (role) {
-      case 'Super Admin': return 'Super Admin Dashboard';
-      case 'Individual': return 'Individual Dashboard';
-      case 'Employer': return 'Employer Dashboard';
-      case 'Trainer': return 'Trainer Dashboard';
-      default: return 'Home';
-    }
-  }
 
   void navigate(String page) {
     setState(() => currentPage = page);
-  }
-
-  // Persist the signed-in user's cart in Firestore. Guest cart remains in memory
-  // until the user signs in.
-  Future<void> _saveCart() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('cart')
-          .doc('current')
-          .set({
-        'productTitles': cart.map((product) => product.title).toList(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cart could not be saved. Check Firestore rules and connection.')),
-        );
-      }
-    }
-  }
-
-  Future<void> _loadCart() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('cart')
-          .doc('current')
-          .get();
-      final titles = (snapshot.data()?['productTitles'] as List<dynamic>?)
-          ?.whereType<String>()
-          .toList() ?? <String>[];
-      if (!mounted) return;
-      final restored = <Product>[];
-      for (final title in titles) {
-        for (final product in products) {
-          if (product.title == title) {
-            restored.add(product);
-            break;
-          }
-        }
-      }
-      if (!mounted) return;
-      setState(() {
-        cart
-          ..clear()
-          ..addAll(restored);
-      });
-    } catch (_) {
-      // Keep the in-memory cart available if a saved cart cannot be loaded.
-    }
-  }
-
-  Future<void> handleLoginSuccess() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      navigate('Home');
-      return;
-    }
-
-    try {
-      final profile = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-      final role = (profile.data()?['role'] as String?)?.trim() ?? '';
-      final profileName = (profile.data()?['name'] as String?)?.trim() ?? '';
-
-      if (!mounted) return;
-      setState(() {
-        signedInRole = role;
-        signedInName = profileName.isNotEmpty ? profileName : (user.email ?? 'Account');
-      });
-      await _loadCart();
-      switch (role) {
-        case 'Super Admin':
-          navigate('Super Admin Dashboard');
-          break;
-        case 'Individual':
-          navigate('Individual Dashboard');
-          break;
-        case 'Employer':
-          navigate('Employer Dashboard');
-          break;
-        case 'Trainer':
-          navigate('Trainer Dashboard');
-          break;
-        default:
-          await FirebaseAuth.instance.signOut();
-          setState(() { signedInRole = null; signedInName = null; });
-          navigate('Login');
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Your account role is missing or invalid. Please contact the administrator.')),
-          );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      await FirebaseAuth.instance.signOut();
-      setState(() { signedInRole = null; signedInName = null; });
-      navigate('Login');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not load your account role. Please check your connection and try again.')),
-      );
-    }
-  }
-
-  String get dashboardPage {
-    switch (signedInRole) {
-      case 'Super Admin': return 'Super Admin Dashboard';
-      case 'Employer': return 'Employer Dashboard';
-      case 'Trainer': return 'Trainer Dashboard';
-      case 'Individual': return 'Individual Dashboard';
-      default: return 'Home';
-    }
-  }
-
-  Future<void> signOutFromWebsite() async {
-    await FirebaseAuth.instance.signOut();
-    if (!mounted) return;
-    setState(() {
-      signedInRole = null;
-      signedInName = null;
-      currentPage = 'Home';
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('You have been signed out.')),
-    );
   }
 
   @override
@@ -412,13 +216,10 @@ class _MainWebsiteState extends State<MainWebsite> {
       'Learning Hub': LearningPage(
         onNavigate: navigate,
       ),
-      'Insights': const InsightsPage(),
-      'Verify Certificate': const CertificateVerificationPage(),
       'Digital Store': StorePage(
         cart: cart,
         onAdd: (product) {
           setState(() => cart.add(product));
-          _saveCart();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('${product.title} added to your cart'),
@@ -432,64 +233,41 @@ class _MainWebsiteState extends State<MainWebsite> {
         cart: cart,
         onRemove: (index) {
           setState(() => cart.removeAt(index));
-          _saveCart();
         },
         onShop: () => navigate('Digital Store'),
-        onCheckout: () {
-          if (FirebaseAuth.instance.currentUser == null) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Please sign in before checkout. Your cart will be saved after sign-in.')),
-            );
-            navigate('Login');
-          } else {
-            navigate('Checkout');
-          }
-        },
+        onCheckout: () => navigate('Login'),
       ),
-      'My Orders': MyOrdersPage(onShop: () => navigate('Digital Store')),
-      'My Digital Products': MyDigitalProductsPage(onShop: () => navigate('Digital Store')),
-      'Product Management': ProductManagementPage(onBack: () => navigate('Super Admin Dashboard')),
-      'Checkout': CheckoutPage(
-        cart: cart,
-        onOrderCreated: (orderId) async {
-          setState(() {
-            latestOrderId = orderId;
-            cart.clear();
-          });
-          await _saveCart();
-          if (!mounted) return;
-          navigate('Demo Payment');
-        },
-      ),
-      'Demo Payment': DemoPaymentPage(
-        orderId: latestOrderId,
-        onFinished: (status) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Demo payment status: $status')),
-          );
-          navigate('Order Confirmation');
-        },
-      ),
-      'Order Confirmation': OrderConfirmationPage(onDone: () => navigate('Digital Store')),
       'Login': LoginPage(
         onRegister: () => navigate('Register'),
-        onLoginSuccess: handleLoginSuccess,
+        onLoginSuccess: (role) {
+          setState(() {
+            signedInRole = role;
+            currentPage = 'Dashboard';
+          });
+        },
       ),
       'Register': RegisterPage(
         onLogin: () => navigate('Login'),
       ),
-      'Super Admin Dashboard': RoleDashboardPage(role: 'Super Admin', onManageProducts: () => navigate('Product Management')),
-      'Individual Dashboard': const RoleDashboardPage(role: 'Individual'),
-      'Employer Dashboard': const RoleDashboardPage(role: 'Employer'),
-      'Trainer Dashboard': const RoleDashboardPage(role: 'Trainer'),
+      'Dashboard': DashboardPage(
+        role: signedInRole,
+        onNavigate: navigate,
+        onSignOut: () async {
+          await FirebaseAuth.instance.signOut();
+          if (!mounted) return;
+          setState(() {
+            signedInRole = 'Individual';
+            currentPage = 'Home';
+          });
+        },
+      ),
       'Contact': const ContactPage(),
     };
 
     return Scaffold(
       appBar: AppBar(
-        toolbarHeight: 72,
-        titleSpacing: 16,
+        toolbarHeight: 76,
+        titleSpacing: 24,
         title: InkWell(
           onTap: () => navigate('Home'),
           child: const Row(
@@ -503,10 +281,10 @@ class _MainWebsiteState extends State<MainWebsite> {
                   Text(
                     'MT ALCHEMY',
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 18,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 1,
-                      color: navy,
+                      color: Colors.white,
                     ),
                   ),
                   Text(
@@ -514,7 +292,7 @@ class _MainWebsiteState extends State<MainWebsite> {
                     style: TextStyle(
                       fontSize: 9,
                       letterSpacing: 1,
-                      color: purple,
+                      color: yellow,
                     ),
                   ),
                 ],
@@ -529,26 +307,16 @@ class _MainWebsiteState extends State<MainWebsite> {
               'About Us',
               'Services',
               'Learning Hub',
-              'Insights',
-              'Verify Certificate',
-              'My Orders',
-              'My Digital Products',
               'Digital Store',
+              if (FirebaseAuth.instance.currentUser != null) 'Dashboard',
               'Contact',
             ].map(
                   (page) => TextButton(
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 10),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
                 onPressed: () => navigate(page),
                 child: Text(
                   page,
-                  maxLines: 1,
                   style: TextStyle(
-                    fontSize: 12.5,
-                    color: currentPage == page ? purple : navy,
+                    color: currentPage == page ? yellow : Colors.white,
                     fontWeight: currentPage == page
                         ? FontWeight.bold
                         : FontWeight.w500,
@@ -562,57 +330,20 @@ class _MainWebsiteState extends State<MainWebsite> {
             icon: Badge(
               label: Text('${cart.length}'),
               isLabelVisible: cart.isNotEmpty,
-              child: const Icon(Icons.shopping_bag_outlined, color: navy),
+              child: const Icon(Icons.shopping_bag_outlined, color: Colors.white),
             ),
           ),
-          if (FirebaseAuth.instance.currentUser != null && signedInRole != null) ...[
-            if (MediaQuery.sizeOf(context).width > 850)
-              Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: Chip(
-                  avatar: const Icon(Icons.account_circle, color: purple, size: 20),
-                  label: Text('${signedInName ?? 'Account'} • $signedInRole'),
-                  backgroundColor: const Color(0xFFF0ECFA),
-                  side: BorderSide.none,
-                ),
+          Padding(
+            padding: const EdgeInsets.only(right: 20, left: 4),
+            child: FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: navy,
+                foregroundColor: Colors.white,
               ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-              child: OutlinedButton.icon(
-                onPressed: () => navigate(dashboardPage),
-                icon: const Icon(Icons.dashboard_outlined, size: 18),
-                label: const Text('Dashboard'),
-              ),
+              onPressed: () => navigate('Login'),
+              child: const Text('Sign in'),
             ),
-            Padding(
-              padding: const EdgeInsets.only(right: 16, left: 2),
-              child: IconButton(
-                tooltip: 'Sign out',
-                onPressed: signOutFromWebsite,
-                icon: const Icon(Icons.logout_rounded, color: navy),
-              ),
-            ),
-          ] else if (_isRestoringSession)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
-          else
-            Padding(
-              padding: const EdgeInsets.only(right: 20, left: 4),
-              child: FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: navy,
-                  foregroundColor: Colors.white,
-                ),
-                onPressed: () => navigate('Login'),
-                child: const Text('Sign in'),
-              ),
-            ),
+          ),
         ],
       ),
       drawer: MediaQuery.sizeOf(context).width <= 850
@@ -626,46 +357,30 @@ class _MainWebsiteState extends State<MainWebsite> {
                 title: Text(
                   'MT ALCHEMY',
                   style: TextStyle(
-                    color: navy,
+                    color: Colors.white,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
               const Divider(),
-              if (FirebaseAuth.instance.currentUser != null && signedInRole != null)
-                ListTile(
-                  leading: const Icon(Icons.account_circle, color: purple),
-                  title: Text(signedInName ?? 'Signed in'),
-                  subtitle: Text(signedInRole!),
-                ),
               for (final page in [
                 'Home',
                 'About Us',
                 'Services',
                 'Learning Hub',
-                'Insights',
-                'Verify Certificate',
-                'My Orders',
-                'My Digital Products',
                 'Digital Store',
                 'Cart',
+                if (FirebaseAuth.instance.currentUser != null) 'Dashboard',
                 'Contact',
-                if (FirebaseAuth.instance.currentUser != null && signedInRole != null) 'Dashboard' else 'Login',
-                if (FirebaseAuth.instance.currentUser != null && signedInRole != null) 'Sign out',
+                'Login',
               ])
                 ListTile(
-                  leading: Icon(page == 'Dashboard' ? Icons.dashboard_outlined : page == 'Sign out' ? Icons.logout : _pageIcon(page)),
+                  leading: Icon(_pageIcon(page)),
                   title: Text(page),
                   selected: currentPage == page,
-                  onTap: () async {
+                  onTap: () {
                     Navigator.pop(context);
-                    if (page == 'Dashboard') {
-                      navigate(dashboardPage);
-                    } else if (page == 'Sign out') {
-                      await signOutFromWebsite();
-                    } else {
-                      navigate(page);
-                    }
+                    navigate(page);
                   },
                 ),
             ],
@@ -709,20 +424,14 @@ class _MainWebsiteState extends State<MainWebsite> {
         return Icons.business_center_outlined;
       case 'Learning Hub':
         return Icons.school_outlined;
-      case 'Insights':
-        return Icons.article_outlined;
-      case 'Verify Certificate':
-        return Icons.verified_outlined;
-      case 'My Orders':
-        return Icons.receipt_long_outlined;
-      case 'My Digital Products':
-        return Icons.download_for_offline_outlined;
       case 'Digital Store':
         return Icons.storefront_outlined;
       case 'Cart':
         return Icons.shopping_cart_outlined;
       case 'Contact':
         return Icons.mail_outline;
+      case 'Dashboard':
+        return Icons.dashboard_outlined;
       default:
         return Icons.login;
     }
@@ -804,7 +513,7 @@ class HomePage extends StatelessWidget {
             ),
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [navy, blue, purple],
+                colors: [navy, blue, Color(0xFF263A5A)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -940,7 +649,7 @@ class HomePage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 45),
-          SectionHeading(
+          const SectionHeading(
             eyebrow: 'WHAT WE OFFER',
             title: 'Everything you need to grow',
             subtitle:
@@ -981,7 +690,7 @@ class HomePage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 50),
-          SectionHeading(
+          const SectionHeading(
             eyebrow: 'FEATURED COURSES',
             title: 'Learning for your next chapter',
             subtitle: 'Start exploring our sample learning catalogue.',
@@ -1007,7 +716,7 @@ class HomePage extends StatelessWidget {
               horizontal: horizontal,
               vertical: 42,
             ),
-            color: const Color(0xFFFFF2CB),
+            color: const Color(0xFFF3E7C8),
             child: Wrap(
               spacing: 25,
               runSpacing: 20,
@@ -1047,7 +756,7 @@ class HomePage extends StatelessWidget {
               ],
             ),
           ),
-          SiteFooter(),
+          const SiteFooter(),
         ],
       ),
     );
@@ -1082,7 +791,7 @@ class AboutPage extends StatelessWidget {
     return SingleChildScrollView(
       child: Column(
         children: [
-          PageBanner(
+          const PageBanner(
             title: 'About MT Alchemy',
             subtitle:
             'Supporting learning, professional development and organisational growth.',
@@ -1146,7 +855,7 @@ class AboutPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 45),
-          SiteFooter(),
+          const SiteFooter(),
         ],
       ),
     );
@@ -1165,7 +874,7 @@ class ServicesPage extends StatelessWidget {
     return SingleChildScrollView(
       child: Column(
         children: [
-          PageBanner(
+          const PageBanner(
             title: 'Our Services',
             subtitle:
             'Learning and development experiences for individuals and organisations.',
@@ -1176,7 +885,7 @@ class ServicesPage extends StatelessWidget {
             child: Wrap(
               spacing: 20,
               runSpacing: 20,
-              children: [
+              children: const [
                 ServiceCard(
                   icon: Icons.cast_for_education,
                   title: 'Learning Programmes',
@@ -1214,7 +923,7 @@ class ServicesPage extends StatelessWidget {
             child: const Text('Enquire About Training'),
           ),
           const SizedBox(height: 45),
-          SiteFooter(),
+          const SiteFooter(),
         ],
       ),
     );
@@ -1228,144 +937,17 @@ class LearningPage extends StatelessWidget {
 
   const LearningPage({super.key, required this.onNavigate});
 
-  String _courseId(Course course) => course.title
-      .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
-      .replaceAll(RegExp(r'^_|_$'), '');
-
-  Future<void> _enrolInCourse(BuildContext context, Course course) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      Navigator.of(context).pop();
-      onNavigate('Login');
-      return;
-    }
-
-    try {
-      final profileSnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-      final profile = profileSnapshot.data() ?? <String, dynamic>{};
-      final role = (profile['role'] ?? '').toString();
-      final status = (profile['status'] ?? 'Active').toString();
-
-      if (status == 'Suspended') {
-        if (!context.mounted) return;
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('This account is suspended. Please contact the administrator.')),
-        );
-        return;
-      }
-
-      if (role != 'Individual') {
-        if (!context.mounted) return;
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Course enrolment is available for Individual accounts.')),
-        );
-        return;
-      }
-
-      final enrollmentRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('enrollments')
-          .doc(_courseId(course));
-      final existing = await enrollmentRef.get();
-
-      if (existing.exists) {
-        if (!context.mounted) return;
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('You are already enrolled in ${course.title}. Open your Dashboard to continue learning.')),
-        );
-        onNavigate('Individual Dashboard');
-        return;
-      }
-
-      await enrollmentRef.set({
-        'courseId': _courseId(course),
-        'title': course.title,
-        'category': course.category,
-        'progress': 0,
-        'enrolledAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      if (!context.mounted) return;
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Successfully enrolled in ${course.title}!')),
-      );
-      onNavigate('Individual Dashboard');
-    } on FirebaseException catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            e.code == 'permission-denied'
-                ? 'Firestore denied enrolment. Please check the enrollment security rules.'
-                : 'Could not enrol in this course. Please try again.',
-          ),
-        ),
-      );
-    } catch (_) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Something went wrong while enrolling. Please try again.')),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final currentUser = FirebaseAuth.instance.currentUser;
-
     return SingleChildScrollView(
       child: Column(
         children: [
-          PageBanner(
+          const PageBanner(
             title: 'Learning Hub',
             subtitle:
             'Explore courses designed to support personal and professional growth.',
           ),
           const SizedBox(height: 30),
-          if (currentUser != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: OutlinedButton.icon(
-                  onPressed: () async {
-                    try {
-                      final profile = await FirebaseFirestore.instance
-                          .collection('users')
-                          .doc(currentUser.uid)
-                          .get();
-                      final role = (profile.data()?['role'] ?? '').toString();
-                      if (!context.mounted) return;
-                      if (role == 'Individual') {
-                        onNavigate('Individual Dashboard');
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('My Learning is available for Individual accounts.')),
-                        );
-                      }
-                    } catch (_) {
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Could not load your account. Please try again.')),
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.menu_book_outlined),
-                  label: const Text('My Learning'),
-                ),
-              ),
-            ),
-          const SizedBox(height: 12),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Wrap(
@@ -1382,17 +964,20 @@ class LearningPage extends StatelessWidget {
                         title: Text(course.title),
                         content: Text(
                           '${course.description}\n\n'
-                              'Enrol in this course to add it to My Learning. You can track your progress from your Individual Dashboard.',
+                              'This is a sample course. Course enrolment and lesson '
+                              'access will be connected to the backend later.',
                         ),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.pop(dialogContext),
                             child: const Text('Close'),
                           ),
-                          FilledButton.icon(
-                            onPressed: () => _enrolInCourse(context, course),
-                            icon: const Icon(Icons.school_outlined),
-                            label: Text(currentUser == null ? 'Sign in to enrol' : 'Enrol in course'),
+                          FilledButton(
+                            onPressed: () {
+                              Navigator.pop(dialogContext);
+                              onNavigate('Login');
+                            },
+                            child: const Text('Sign in to continue'),
                           ),
                         ],
                       ),
@@ -1403,7 +988,7 @@ class LearningPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 35),
-          SiteFooter(),
+          const SiteFooter(),
         ],
       ),
     );
@@ -1426,152 +1011,84 @@ class StorePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final productsRef = FirebaseFirestore.instance
-        .collection('products')
-        .where('available', isEqualTo: true);
-
     return SingleChildScrollView(
       child: Column(
         children: [
-          PageBanner(
+          const PageBanner(
             title: 'Digital Store',
-            subtitle: 'Discover learning guides, workbooks and digital resources.',
+            subtitle:
+            'Discover learning guides, workbooks and digital resources.',
           ),
           const SizedBox(height: 30),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1200),
-              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream: productsRef.snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.hasError) {
-                    return Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          children: [
-                            const Icon(Icons.error_outline, color: Colors.red, size: 42),
-                            const SizedBox(height: 12),
-                            const Text('Unable to load store products.'),
-                            const SizedBox(height: 6),
-                            const Text(
-                              'Check your Firestore products read rules and connection.',
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Padding(
-                      padding: EdgeInsets.all(40),
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  }
-
-                  final docs = snapshot.data?.docs ?? [];
-                  if (docs.isEmpty) {
-                    return Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(28),
-                        child: Column(
-                          children: [
-                            const Icon(Icons.storefront_outlined, size: 56, color: purple),
-                            const SizedBox(height: 12),
-                            const Text(
-                              'No products available yet',
-                              style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold, color: navy),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text('Published products added by the Super Admin will appear here.'),
-                          ],
-                        ),
-                      ),
-                    );
-                  }
-
-                  return Wrap(
-                    spacing: 20,
-                    runSpacing: 20,
-                    children: docs.map((doc) {
-                      final data = doc.data();
-                      final title = (data['title'] ?? 'Untitled product').toString();
-                      final description = (data['description'] ?? '').toString();
-                      final priceValue = (data['price'] as num?)?.toDouble() ?? 0.0;
-                      final type = (data['type'] ?? 'Digital').toString();
-                      final isPhysical = type.toLowerCase() == 'physical';
-                      final product = Product(
-                        title,
-                        description,
-                        'RM ${priceValue.toStringAsFixed(2)}',
-                        isPhysical ? Icons.inventory_2_outlined : Icons.menu_book_outlined,
-                        isPhysical ? blue : purple,
-                        type: type,
-                      );
-
-                      return Container(
-                        width: 280,
-                        padding: const EdgeInsets.all(22),
+            child: Wrap(
+              spacing: 20,
+              runSpacing: 20,
+              children: products.map((product) {
+                return Container(
+                  width: 280,
+                  padding: const EdgeInsets.all(22),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFE8E2D5)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        height: 130,
+                        width: double.infinity,
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: const Color(0xFFE5E8F0)),
+                          color: product.color.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(14),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              height: 130,
-                              width: double.infinity,
-                              decoration: BoxDecoration(
-                                color: product.color.withValues(alpha: 0.10),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: Icon(product.icon, size: 55, color: product.color),
-                            ),
-                            const SizedBox(height: 14),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    product.title,
-                                    style: const TextStyle(color: navy, fontWeight: FontWeight.bold, fontSize: 18),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: product.color.withValues(alpha: 0.10),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(type, style: TextStyle(color: product.color, fontSize: 11, fontWeight: FontWeight.w600)),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Text(product.description, style: const TextStyle(height: 1.6, color: Colors.black54)),
-                            const SizedBox(height: 14),
-                            Text(product.price, style: const TextStyle(fontWeight: FontWeight.bold, color: purple, fontSize: 19)),
-                            const SizedBox(height: 14),
-                            SizedBox(
-                              width: double.infinity,
-                              child: FilledButton.icon(
-                                style: FilledButton.styleFrom(backgroundColor: navy),
-                                onPressed: () => onAdd(product),
-                                icon: const Icon(Icons.add_shopping_cart),
-                                label: const Text('Add to cart'),
-                              ),
-                            ),
-                          ],
+                        child: Icon(
+                          product.icon,
+                          size: 55,
+                          color: product.color,
                         ),
-                      );
-                    }).toList(),
-                  );
-                },
-              ),
+                      ),
+                      const SizedBox(height: 18),
+                      Text(
+                        product.title,
+                        style: const TextStyle(
+                          color: navy,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        product.description,
+                        style: const TextStyle(height: 1.6, color: Colors.black54),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        product.price,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: purple,
+                          fontSize: 19,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: navy,
+                          ),
+                          onPressed: () => onAdd(product),
+                          icon: const Icon(Icons.add_shopping_cart),
+                          label: const Text('Add to cart'),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
             ),
           ),
           const SizedBox(height: 25),
@@ -1581,7 +1098,7 @@ class StorePage extends StatelessWidget {
             label: Text('View Cart (${cart.length})'),
           ),
           const SizedBox(height: 45),
-          SiteFooter(),
+          const SiteFooter(),
         ],
       ),
     );
@@ -1609,7 +1126,7 @@ class CartPage extends StatelessWidget {
     return SingleChildScrollView(
       child: Column(
         children: [
-          PageBanner(
+          const PageBanner(
             title: 'Your Cart',
             subtitle: 'Review your selected digital learning resources.',
           ),
@@ -1679,878 +1196,8 @@ class CartPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 45),
-          SiteFooter(),
+          const SiteFooter(),
         ],
-      ),
-    );
-  }
-}
-
-
-// -------------------- CHECKOUT --------------------
-
-class CheckoutPage extends StatefulWidget {
-  final List<Product> cart;
-  final ValueChanged<String> onOrderCreated;
-
-  const CheckoutPage({
-    super.key,
-    required this.cart,
-    required this.onOrderCreated,
-  });
-
-  @override
-  State<CheckoutPage> createState() => _CheckoutPageState();
-}
-
-class _CheckoutPageState extends State<CheckoutPage> {
-  final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _billingController = TextEditingController();
-  final _shippingController = TextEditingController();
-  bool _submitting = false;
-
-  bool get _containsPhysical => widget.cart.any((product) => product.type.toLowerCase() == 'physical');
-
-  double get _total => widget.cart.fold<double>(
-    0,
-        (sum, product) =>
-    sum + (double.tryParse(product.price.replaceAll('RM', '').trim()) ?? 0),
-  );
-
-  @override
-  void initState() {
-    super.initState();
-    final user = FirebaseAuth.instance.currentUser;
-    _emailController.text = user?.email ?? '';
-    _loadProfile();
-  }
-
-  Future<void> _loadProfile() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-      final data = snapshot.data() ?? <String, dynamic>{};
-      if (!mounted) return;
-      _nameController.text = (data['name'] ?? '').toString();
-      if (_emailController.text.isEmpty) {
-        _emailController.text = (data['email'] ?? user.email ?? '').toString();
-      }
-    } catch (_) {}
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _emailController.dispose();
-    _phoneController.dispose();
-    _billingController.dispose();
-    _shippingController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _placeOrder() async {
-    if (!_formKey.currentState!.validate()) return;
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please sign in before placing an order.')),
-      );
-      return;
-    }
-    if (widget.cart.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Your cart is empty. Add a product first.')),
-      );
-      return;
-    }
-
-    setState(() => _submitting = true);
-    try {
-      final profile = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-      if ((profile.data()?['status'] ?? 'Active') == 'Suspended') {
-        throw Exception('This account is suspended.');
-      }
-
-      final orderRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('orders')
-          .doc();
-
-      final orderItems = widget.cart.map((product) {
-        final price = double.tryParse(
-          product.price.replaceAll('RM', '').trim(),
-        ) ??
-            0.0;
-        return {
-          'title': product.title,
-          'description': product.description,
-          'price': price,
-          'quantity': 1,
-          'digital': product.type.toLowerCase() != 'physical',
-          'type': product.type,
-        };
-      }).toList();
-
-      await orderRef.set({
-        'orderId': orderRef.id,
-        'userId': user.uid,
-        'customerName': _nameController.text.trim(),
-        'customerEmail': _emailController.text.trim(),
-        'customerPhone': _phoneController.text.trim(),
-        'billingAddress': _billingController.text.trim(),
-        'containsPhysical': _containsPhysical,
-        'shippingAddress': _containsPhysical ? _shippingController.text.trim() : '',
-        'shippingStatus': _containsPhysical ? 'Pending Dispatch' : 'Not Applicable',
-        'items': orderItems,
-        'total': _total,
-        'currency': 'MYR',
-        'orderStatus': 'Awaiting Payment',
-        'paymentStatus': 'Pending',
-        'paymentMethod': 'Demo payment',
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      if (!mounted) return;
-      widget.onOrderCreated(orderRef.id);
-    } on FirebaseException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.code == 'permission-denied'
-              ? 'Firestore denied the order. Add the orders security rule first.'
-              : 'Could not create the order: ${e.message ?? e.code}'),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-      );
-    } finally {
-      if (mounted) setState(() => _submitting = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 850),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              PageBanner(
-                title: 'Checkout',
-                subtitle: 'Confirm your details and create your demo order.',
-              ),
-              const SizedBox(height: 24),
-              Card(
-                color: Colors.white,
-                child: Padding(
-                  padding: const EdgeInsets.all(22),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const Text('Customer details',
-                            style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold, color: navy)),
-                        const SizedBox(height: 18),
-                        TextFormField(
-                          controller: _nameController,
-                          decoration: const InputDecoration(labelText: 'Full name *', border: OutlineInputBorder()),
-                          validator: (v) => v == null || v.trim().isEmpty ? 'Enter your full name' : null,
-                        ),
-                        const SizedBox(height: 14),
-                        TextFormField(
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          decoration: const InputDecoration(labelText: 'Email address *', border: OutlineInputBorder()),
-                          validator: (v) => v == null || !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v.trim()) ? 'Enter a valid email address' : null,
-                        ),
-                        const SizedBox(height: 14),
-                        TextFormField(
-                          controller: _phoneController,
-                          keyboardType: TextInputType.phone,
-                          decoration: const InputDecoration(labelText: 'Phone number *', border: OutlineInputBorder()),
-                          validator: (v) => v == null || v.trim().length < 7 ? 'Enter a valid phone number' : null,
-                        ),
-                        const SizedBox(height: 14),
-                        TextFormField(
-                          controller: _billingController,
-                          maxLines: 2,
-                          decoration: const InputDecoration(labelText: 'Billing address (optional)', border: OutlineInputBorder()),
-                        ),
-                        if (_containsPhysical) ...[
-                          const SizedBox(height: 14),
-                          const Text('Shipping details', style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold, color: navy)),
-                          const SizedBox(height: 8),
-                          TextFormField(
-                            controller: _shippingController,
-                            maxLines: 3,
-                            decoration: const InputDecoration(labelText: 'Full shipping address *', hintText: 'Street, city, state, postcode', border: OutlineInputBorder(), prefixIcon: Icon(Icons.local_shipping_outlined)),
-                            validator: (v) => _containsPhysical && (v == null || v.trim().length < 10) ? 'Enter a complete shipping address' : null,
-                          ),
-                          const SizedBox(height: 8),
-                          const Text('Shipping status will begin as Pending Dispatch after a successful demo payment.', style: TextStyle(color: Colors.black54)),
-                        ],
-                        const SizedBox(height: 24),
-                        const Text('Order summary',
-                            style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold, color: navy)),
-                        const SizedBox(height: 10),
-                        if (widget.cart.isEmpty)
-                          const Text('Your cart is empty. Return to the Digital Store to add products.')
-                        else
-                          ...widget.cart.map((product) => ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: Icon(product.icon, color: product.color),
-                            title: Text(product.title),
-                            subtitle: Text(product.type),
-                            trailing: Text(product.price),
-                          )),
-                        const Divider(),
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('Total', style: TextStyle(fontWeight: FontWeight.bold)),
-                          trailing: Text('RM ${_total.toStringAsFixed(2)}',
-                              style: const TextStyle(fontWeight: FontWeight.bold, color: purple, fontSize: 20)),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Demo checkout only. No real payment is taken. The order will be saved as Awaiting Payment.',
-                          style: TextStyle(color: Colors.black54),
-                        ),
-                        const SizedBox(height: 18),
-                        FilledButton.icon(
-                          onPressed: _submitting || widget.cart.isEmpty ? null : _placeOrder,
-                          icon: _submitting
-                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                              : const Icon(Icons.receipt_long_outlined),
-                          label: Text(_submitting ? 'Creating order...' : 'Create Order'),
-                          style: FilledButton.styleFrom(backgroundColor: navy, padding: const EdgeInsets.all(18)),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 30),
-              SiteFooter(),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-
-// -------------------- MY ORDERS --------------------
-
-class MyOrdersPage extends StatelessWidget {
-  final VoidCallback onShop;
-  const MyOrdersPage({super.key, required this.onShop});
-
-  String _dateLabel(dynamic value) {
-    if (value is Timestamp) {
-      final d = value.toDate().toLocal();
-      return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
-    }
-    return 'Date unavailable';
-  }
-
-  Color _statusColor(String status) {
-    switch (status) {
-      case 'Successful':
-      case 'Processing (Demo)':
-        return Colors.green.shade700;
-      case 'Failed':
-      case 'Payment Failed':
-        return Colors.red.shade700;
-      default:
-        return Colors.orange.shade800;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      return const Center(child: Padding(
-        padding: EdgeInsets.all(32),
-        child: Text('Please sign in to view your orders.'),
-      ));
-    }
-
-    final ordersRef = FirebaseFirestore.instance
-        .collection('users').doc(user.uid).collection('orders');
-
-    return SingleChildScrollView(
-      child: Column(children: [
-        PageBanner(
-          title: 'My Orders',
-          subtitle: 'View your order history, totals and demo payment status.',
-        ),
-        const SizedBox(height: 24),
-        Padding(
-          padding: const EdgeInsets.all(20),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1000),
-            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: ordersRef.orderBy('createdAt', descending: true).snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return const Card(child: Padding(
-                    padding: EdgeInsets.all(20),
-                    child: Text('Could not load orders. Check your Firestore rules and connection.'),
-                  ));
-                }
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.all(35),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-                final docs = snapshot.data?.docs ?? [];
-                if (docs.isEmpty) {
-                  return Card(color: Colors.white, child: Padding(
-                    padding: const EdgeInsets.all(28),
-                    child: Column(children: [
-                      const Icon(Icons.receipt_long_outlined, size: 58, color: purple),
-                      const SizedBox(height: 12),
-                      const Text('No orders yet', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: navy)),
-                      const SizedBox(height: 8),
-                      const Text('Your orders will appear here after checkout.'),
-                      const SizedBox(height: 18),
-                      FilledButton(onPressed: onShop, child: const Text('Browse Digital Store')),
-                    ]),
-                  ));
-                }
-                return Column(children: docs.map((doc) {
-                  final data = doc.data();
-                  final items = (data['items'] as List<dynamic>?) ?? [];
-                  final payment = (data['paymentStatus'] ?? 'Pending').toString();
-                  final orderStatus = (data['orderStatus'] ?? 'Awaiting Payment').toString();
-                  final total = (data['total'] as num?)?.toDouble() ?? 0;
-                  return Card(
-                    color: Colors.white,
-                    margin: const EdgeInsets.only(bottom: 14),
-                    child: Padding(
-                      padding: const EdgeInsets.all(18),
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        LayoutBuilder(
-                          builder: (context, constraints) {
-                            final narrow = constraints.maxWidth < 520;
-                            return Flex(
-                              direction: narrow ? Axis.vertical : Axis.horizontal,
-                              crossAxisAlignment: narrow
-                                  ? CrossAxisAlignment.start
-                                  : CrossAxisAlignment.center,
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    'Order ${doc.id}',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: navy,
-                                    ),
-                                  ),
-                                ),
-                                if (narrow) const SizedBox(height: 5),
-                                Text(
-                                  _dateLabel(data['createdAt']),
-                                  style: const TextStyle(color: Colors.black54),
-                                ),
-                              ],
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 10),
-                        Text(items.map((e) => e is Map ? '${e['title'] ?? 'Product'} × ${e['quantity'] ?? 1}' : '$e').join(', ')),
-                        const SizedBox(height: 12),
-                        Wrap(spacing: 10, runSpacing: 8, children: [
-                          Chip(label: Text('Payment: $payment'), backgroundColor: _statusColor(payment).withValues(alpha: .10), side: BorderSide.none),
-                          Chip(label: Text('Order: $orderStatus'), backgroundColor: _statusColor(orderStatus).withValues(alpha: .10), side: BorderSide.none),
-                          if (data['containsPhysical'] == true)
-                            Chip(label: Text('Shipping: ${(data['shippingStatus'] ?? 'Pending Dispatch').toString()}'), backgroundColor: Colors.blue.withValues(alpha: .10), side: BorderSide.none),
-                        ]),
-                        if (data['containsPhysical'] == true && (data['shippingAddress'] ?? '').toString().isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Text('Shipping to: ${data['shippingAddress']}', style: const TextStyle(color: Colors.black54)),
-                        ],
-                        const Divider(height: 24),
-                        Row(children: [
-                          Expanded(child: Text('Total: RM ${total.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: purple))),
-                          TextButton.icon(
-                            onPressed: () => showDialog<void>(
-                              context: context,
-                              builder: (dialogContext) => AlertDialog(
-                                title: const Text('Order details'),
-                                content: SizedBox(width: 420, child: SingleChildScrollView(child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    SelectableText('Order ID: ${doc.id}'),
-                                    const SizedBox(height: 8),
-                                    Text('Date: ${_dateLabel(data['createdAt'])}'),
-                                    Text('Customer: ${data['customerName'] ?? ''}'),
-                                    Text('Email: ${data['customerEmail'] ?? ''}'),
-                                    const SizedBox(height: 12),
-                                    const Text('Items', style: TextStyle(fontWeight: FontWeight.bold)),
-                                    ...items.map((item) {
-                                      final map = item is Map ? item : <String, dynamic>{'title': item.toString()};
-                                      final price = (map['price'] as num?)?.toDouble() ?? 0;
-                                      return ListTile(
-                                        contentPadding: EdgeInsets.zero,
-                                        title: Text('${map['title'] ?? 'Product'}'),
-                                        subtitle: Text('Quantity: ${map['quantity'] ?? 1}'),
-                                        trailing: Text('RM ${price.toStringAsFixed(2)}'),
-                                      );
-                                    }),
-                                    const Divider(),
-                                    Text('Total: RM ${total.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                    Text('Payment status: $payment'),
-                                    Text('Order status: $orderStatus'),
-                                    if (data['containsPhysical'] == true) ...[
-                                      Text('Shipping status: ${(data['shippingStatus'] ?? 'Pending Dispatch').toString()}'),
-                                      Text('Shipping address: ${(data['shippingAddress'] ?? '').toString()}'),
-                                    ],
-                                  ],
-                                ))),
-                                actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Close'))],
-                              ),
-                            ),
-                            icon: const Icon(Icons.visibility_outlined),
-                            label: const Text('View details'),
-                          ),
-                        ]),
-                      ]),
-                    ),
-                  );
-                }).toList());
-              },
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
-        SiteFooter(),
-      ]),
-    );
-  }
-}
-
-// -------------------- MY DIGITAL PRODUCTS --------------------
-// Demo digital-product library. For successful demo orders, users can generate
-// a sample PDF locally without Firebase Storage. These are demonstration files,
-// not official MT Alchemy product assets or proof of real payment.
-
-class MyDigitalProductsPage extends StatelessWidget {
-  final VoidCallback onShop;
-  const MyDigitalProductsPage({super.key, required this.onShop});
-
-  @override
-  Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      return const Center(child: Padding(
-        padding: EdgeInsets.all(32),
-        child: Text('Please sign in to view your digital products.'),
-      ));
-    }
-
-    final ordersRef = FirebaseFirestore.instance
-        .collection('users').doc(user.uid).collection('orders');
-
-    return SingleChildScrollView(
-      child: Column(children: [
-        PageBanner(
-          title: 'My Digital Products',
-          subtitle: 'Resources associated with successful demo orders.',
-        ),
-        Padding(
-          padding: const EdgeInsets.all(20),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1000),
-            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: ordersRef.where('paymentStatus', isEqualTo: 'Successful').snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return const Card(child: Padding(
-                    padding: EdgeInsets.all(20),
-                    child: Text('Could not load purchased products. Please check your Firestore rules.'),
-                  ));
-                }
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.all(35),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-                final productsByTitle = <String, Map<String, dynamic>>{};
-                for (final doc in snapshot.data?.docs ?? []) {
-                  final items = doc.data()['items'];
-                  if (items is List) {
-                    for (final item in items) {
-                      if (item is Map) {
-                        final title = (item['title'] ?? 'Digital product').toString();
-                        productsByTitle.putIfAbsent(title, () => {
-                          'title': title,
-                          'description': (item['description'] ?? '').toString(),
-                          'orderId': doc.id,
-                        });
-                      }
-                    }
-                  }
-                }
-                if (productsByTitle.isEmpty) {
-                  return Card(color: Colors.white, child: Padding(
-                    padding: const EdgeInsets.all(28),
-                    child: Column(children: [
-                      const Icon(Icons.download_for_offline_outlined, size: 58, color: purple),
-                      const SizedBox(height: 12),
-                      const Text('No eligible digital products yet', style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold, color: navy)),
-                      const SizedBox(height: 8),
-                      const Text('Products appear here after a demo order has a Successful payment status.'),
-                      const SizedBox(height: 18),
-                      FilledButton(onPressed: onShop, child: const Text('Browse Digital Store')),
-                    ]),
-                  ));
-                }
-                return Column(children: productsByTitle.values.map((product) => Card(
-                  color: Colors.white,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  child: ListTile(
-                    leading: const CircleAvatar(backgroundColor: Color(0xFFF0ECFA), child: Icon(Icons.menu_book_outlined, color: purple)),
-                    title: Text(product['title'] as String, style: const TextStyle(fontWeight: FontWeight.bold, color: navy)),
-                    subtitle: Text((product['description'] as String).isEmpty
-                        ? 'Order ${product['orderId']}'
-                        : '${product['description']}\nOrder ${product['orderId']}'),
-                    isThreeLine: true,
-                    trailing: FilledButton.icon(
-                      onPressed: () async {
-                        try {
-                          await _downloadDigitalProductSample(
-                            title: product['title'] as String,
-                            description: product['description'] as String,
-                          );
-                        } catch (error) {
-                          if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Could not create sample PDF: $error')),
-                          );
-                        }
-                      },
-                      icon: const Icon(Icons.download_outlined, size: 18),
-                      label: const Text('Download sample'),
-                    ),
-                  ),
-                )).toList());
-              },
-            ),
-          ),
-        ),
-        SiteFooter(),
-      ]),
-    );
-  }
-}
-
-// Generates a demonstration PDF for a product in a successful demo order.
-// On Flutter Web, Printing.layoutPdf opens the browser print/save workflow.
-Future<void> _downloadDigitalProductSample({
-  required String title,
-  required String description,
-}) async {
-  final document = pw.Document();
-  const darkNavy = PdfColor.fromInt(0xFF142B55);
-  const accentPurple = PdfColor.fromInt(0xFF7555B7);
-  const gold = PdfColor.fromInt(0xFFFFD66B);
-
-  document.addPage(
-    pw.MultiPage(
-      pageFormat: PdfPageFormat.a4,
-      margin: const pw.EdgeInsets.all(40),
-      build: (context) => [
-        pw.Container(
-          padding: const pw.EdgeInsets.only(bottom: 16),
-          decoration: const pw.BoxDecoration(
-            border: pw.Border(bottom: pw.BorderSide(color: gold, width: 3)),
-          ),
-          child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Text('MT ALCHEMY', style: pw.TextStyle(
-                color: accentPurple, fontSize: 13, fontWeight: pw.FontWeight.bold,
-              )),
-              pw.SizedBox(height: 14),
-              pw.Text(title, style: pw.TextStyle(
-                color: darkNavy, fontSize: 25, fontWeight: pw.FontWeight.bold,
-              )),
-              if (description.trim().isNotEmpty) ...[
-                pw.SizedBox(height: 8),
-                pw.Text(description, style: const pw.TextStyle(fontSize: 11)),
-              ],
-            ],
-          ),
-        ),
-        pw.SizedBox(height: 24),
-        pw.Text('Digital product sample', style: pw.TextStyle(
-          color: darkNavy, fontSize: 16, fontWeight: pw.FontWeight.bold,
-        )),
-        pw.SizedBox(height: 8),
-        pw.Text(
-          'This sample PDF demonstrates the MT Alchemy digital download flow. '
-              'It is a generated prototype document, not the official purchased product.',
-          style: const pw.TextStyle(fontSize: 11, lineSpacing: 4),
-        ),
-        pw.SizedBox(height: 20),
-        pw.Text('Reflection activity', style: pw.TextStyle(
-          color: accentPurple, fontSize: 14, fontWeight: pw.FontWeight.bold,
-        )),
-        pw.SizedBox(height: 8),
-        pw.Text('1. What is one skill or behaviour you would like to strengthen?',
-            style: const pw.TextStyle(fontSize: 11)),
-        pw.SizedBox(height: 10),
-        pw.Container(height: 36, decoration: const pw.BoxDecoration(
-          border: pw.Border(bottom: pw.BorderSide(color: PdfColors.grey400)),
-        )),
-        pw.SizedBox(height: 12),
-        pw.Text('2. What is one small action you can practise this week?',
-            style: const pw.TextStyle(fontSize: 11)),
-        pw.SizedBox(height: 10),
-        pw.Container(height: 36, decoration: const pw.BoxDecoration(
-          border: pw.Border(bottom: pw.BorderSide(color: PdfColors.grey400)),
-        )),
-        pw.SizedBox(height: 24),
-        pw.Text('MT Alchemy - Learn - Grow - Transform', style: const pw.TextStyle(
-          color: PdfColors.grey700, fontSize: 9,
-        )),
-      ],
-    ),
-  );
-
-  await Printing.layoutPdf(
-    onLayout: (format) async => document.save(),
-    name: '${title.replaceAll(RegExp(r'[^A-Za-z0-9_-]+'), '_')}_sample.pdf',
-  );
-}
-
-// -------------------- DEMO PAYMENT --------------------
-
-class DemoPaymentPage extends StatefulWidget {
-  final String? orderId;
-  final ValueChanged<String> onFinished;
-
-  const DemoPaymentPage({
-    super.key,
-    required this.orderId,
-    required this.onFinished,
-  });
-
-  @override
-  State<DemoPaymentPage> createState() => _DemoPaymentPageState();
-}
-
-class _DemoPaymentPageState extends State<DemoPaymentPage> {
-  bool _processing = false;
-
-  Future<void> _setDemoStatus(String status) async {
-    final user = FirebaseAuth.instance.currentUser;
-    final orderId = widget.orderId;
-    if (user == null || orderId == null || orderId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Order not found. Please create an order first.')),
-      );
-      return;
-    }
-
-    setState(() => _processing = true);
-    try {
-      final orderRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('orders')
-          .doc(orderId);
-
-      final orderSnapshot = await orderRef.get();
-      if (!orderSnapshot.exists) {
-        throw Exception('This order could not be found.');
-      }
-      final order = orderSnapshot.data() ?? <String, dynamic>{};
-      if (order['paymentStatus'] != 'Pending') {
-        throw Exception('This order already has a payment result.');
-      }
-
-      final hasPhysical = order['containsPhysical'] == true;
-      final orderStatus = status == 'Successful'
-          ? (hasPhysical ? 'Processing' : 'Processing (Demo)')
-          : status == 'Failed'
-          ? 'Payment Failed'
-          : 'Awaiting Payment';
-
-      await orderRef.update({
-        'paymentStatus': status,
-        'orderStatus': orderStatus,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      if (!mounted) return;
-      widget.onFinished(status);
-    } on FirebaseException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.code == 'permission-denied'
-              ? 'Firestore denied the payment update. Add the demo payment update rule.'
-              : 'Could not update demo payment: ${e.message ?? e.code}'),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
-      );
-    } finally {
-      if (mounted) setState(() => _processing = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 760),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              PageBanner(
-                title: 'Demo Payment',
-                subtitle: 'Choose a simulated result to test the checkout workflow.',
-              ),
-              const SizedBox(height: 24),
-              Card(
-                color: Colors.white,
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Icon(Icons.payment_outlined, size: 58, color: purple),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Coursework demo only',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: navy),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'No real payment method is used and no money will be charged. Select a result below to test how the order status changes.',
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 18),
-                      Text('Order ID: ${widget.orderId ?? 'Not available'}',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 22),
-                      FilledButton.icon(
-                        onPressed: _processing ? null : () => _setDemoStatus('Successful'),
-                        icon: const Icon(Icons.check_circle_outline),
-                        label: const Text('Simulate Successful Payment'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: Colors.green.shade700,
-                          padding: const EdgeInsets.all(16),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      OutlinedButton.icon(
-                        onPressed: _processing ? null : () => _setDemoStatus('Failed'),
-                        icon: const Icon(Icons.error_outline, color: Colors.red),
-                        label: const Text('Simulate Failed Payment'),
-                        style: OutlinedButton.styleFrom(padding: const EdgeInsets.all(16)),
-                      ),
-                      const SizedBox(height: 12),
-                      OutlinedButton.icon(
-                        onPressed: _processing ? null : () => _setDemoStatus('Pending'),
-                        icon: const Icon(Icons.hourglass_empty),
-                        label: const Text('Keep Payment Pending'),
-                        style: OutlinedButton.styleFrom(padding: const EdgeInsets.all(16)),
-                      ),
-                      if (_processing) ...[
-                        const SizedBox(height: 16),
-                        const Center(child: CircularProgressIndicator()),
-                      ],
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Important: a successful result here is only a simulation for coursework. It is not proof of a real payment.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.black54, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 30),
-              SiteFooter(),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class OrderConfirmationPage extends StatelessWidget {
-  final VoidCallback onDone;
-  const OrderConfirmationPage({super.key, required this.onDone});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Card(
-          color: Colors.white,
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.check_circle_outline, color: Colors.green, size: 72),
-                const SizedBox(height: 16),
-                const Text('Order Created Successfully',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 27, fontWeight: FontWeight.bold, color: navy)),
-                const SizedBox(height: 12),
-                const Text(
-                  'Your order has been saved. Payment is still pending because this is a demo checkout. You can now continue to the next step: demo payment and order history.',
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 22),
-                FilledButton(
-                  onPressed: onDone,
-                  child: const Text('Return to Store'),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -2563,7 +1210,7 @@ class OrderConfirmationPage extends StatelessWidget {
 
 class LoginPage extends StatefulWidget {
   final VoidCallback onRegister;
-  final VoidCallback onLoginSuccess;
+  final ValueChanged<String> onLoginSuccess;
 
   const LoginPage({
     super.key,
@@ -2603,35 +1250,44 @@ class _LoginPageState extends State<LoginPage> {
         password: passwordController.text,
       );
 
-      final signedInUser = credential.user;
-      if (signedInUser != null) {
-        final profile = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(signedInUser.uid)
-            .get();
-        final status = (profile.data()?['status'] ?? 'Active').toString();
-        if (status == 'Suspended') {
-          await FirebaseAuth.instance.signOut();
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('This account is suspended. Please contact the administrator.'),
-            ),
-          );
-          return;
-        }
+      final user = credential.user;
+      if (user == null) {
+        throw Exception('Firebase returned no signed-in user.');
+      }
+
+      final profileSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      if (!profileSnapshot.exists) {
+        await FirebaseAuth.instance.signOut();
+        throw Exception(
+          'Your user profile was not found in Firestore. Please contact the administrator.',
+        );
+      }
+
+      final profile = profileSnapshot.data() ?? <String, dynamic>{};
+      final role = (profile['role'] ?? '').toString().trim();
+      final status = (profile['status'] ?? 'Active').toString().trim();
+
+      if (status.toLowerCase() != 'active') {
+        await FirebaseAuth.instance.signOut();
+        throw Exception('This account is not active. Please contact the administrator.');
       }
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Login Success: Welcome ${credential.user?.email ?? ''}',
-          ),
+          content: Text('Login successful. Welcome ${user.email ?? ''}'),
         ),
       );
-      widget.onLoginSuccess();
+      widget.onLoginSuccess(
+        ['Individual', 'Employer', 'Trainer', 'Super Admin'].contains(role)
+            ? role
+            : 'Individual',
+      );
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
 
@@ -2665,8 +1321,8 @@ class _LoginPageState extends State<LoginPage> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Something went wrong. Please try again.'),
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
         ),
       );
     } finally {
@@ -2687,7 +1343,7 @@ class _LoginPageState extends State<LoginPage> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFFE5E8F0)),
+            border: Border.all(color: const Color(0xFFE8E2D5)),
           ),
           child: Form(
             key: formKey,
@@ -2847,1696 +1503,458 @@ class _LoginPageState extends State<LoginPage> {
 }
 
 
-// -------------------- ROLE DASHBOARDS --------------------
 
-class RoleDashboardPage extends StatefulWidget {
+// -------------------- ROLE-BASED DASHBOARD --------------------
+
+class DashboardPage extends StatelessWidget {
   final String role;
-  final VoidCallback? onManageProducts;
-  const RoleDashboardPage({super.key, required this.role, this.onManageProducts});
+  final ValueChanged<String> onNavigate;
+  final VoidCallback onSignOut;
 
-  @override
-  State<RoleDashboardPage> createState() => _RoleDashboardPageState();
-}
-
-class _RoleDashboardPageState extends State<RoleDashboardPage> {
-  final TextEditingController _searchController = TextEditingController();
-  String _searchText = '';
-  bool _isUpdatingRole = false;
-  bool _isUpdatingStatus = false;
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _changeUserRole(
-      QueryDocumentSnapshot<Map<String, dynamic>> doc,
-      String newRole,
-      ) async {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null || doc.id == currentUser.uid) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You cannot change your own role here.')),
-      );
-      return;
-    }
-
-    final data = doc.data();
-    final oldRole = (data['role'] ?? 'Unassigned').toString();
-    if (oldRole == newRole) return;
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Change account role?'),
-        content: Text(
-          'Change ${(data['name'] ?? data['email'] ?? 'this user').toString()} '
-              'from $oldRole to $newRole?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Confirm change'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !mounted) return;
-
-    setState(() => _isUpdatingRole = true);
-    try {
-      await doc.reference.update({'role': newRole});
-      await writeActivityLog(
-        action: 'Role changed',
-        targetUid: doc.id,
-        targetName: (data['name'] ?? 'Name not provided').toString(),
-        targetEmail: (data['email'] ?? '').toString(),
-        oldValue: oldRole,
-        newValue: newRole,
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('User role updated successfully.')),
-      );
-    } on FirebaseException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            e.code == 'permission-denied'
-                ? 'Permission denied. Update your Firestore rules for Super Admin role changes.'
-                : 'Could not update this role. Please try again.',
-          ),
-        ),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not update this role. Please try again.')),
-      );
-    } finally {
-      if (mounted) setState(() => _isUpdatingRole = false);
-    }
-  }
-
-  Future<void> _changeUserStatus(
-      QueryDocumentSnapshot<Map<String, dynamic>> doc,
-      String newStatus,
-      ) async {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null || doc.id == currentUser.uid) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You cannot suspend or reactivate your own account here.')),
-      );
-      return;
-    }
-
-    final data = doc.data();
-    final oldStatus = (data['status'] ?? 'Active').toString();
-    if (oldStatus == newStatus) return;
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(newStatus == 'Suspended' ? 'Suspend account?' : 'Reactivate account?'),
-        content: Text(
-          '${(data['name'] ?? data['email'] ?? 'This user').toString()} will be marked $newStatus. '
-              'A suspended account will be blocked at the next sign-in.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: Text(newStatus == 'Suspended' ? 'Suspend' : 'Reactivate'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !mounted) return;
-    setState(() => _isUpdatingStatus = true);
-    try {
-      await doc.reference.update({'status': newStatus});
-      await writeActivityLog(
-        action: newStatus == 'Suspended' ? 'Account suspended' : 'Account reactivated',
-        targetUid: doc.id,
-        targetName: (data['name'] ?? 'Name not provided').toString(),
-        targetEmail: (data['email'] ?? '').toString(),
-        oldValue: oldStatus,
-        newValue: newStatus,
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('User account marked $newStatus.')),
-      );
-    } on FirebaseException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.code == 'permission-denied'
-              ? 'Permission denied. Update your Firestore rules to allow Super Admin status changes.'
-              : 'Could not update account status. Please try again.'),
-        ),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not update account status. Please try again.')),
-      );
-    } finally {
-      if (mounted) setState(() => _isUpdatingStatus = false);
-    }
-  }
+  const DashboardPage({
+    super.key,
+    required this.role,
+    required this.onNavigate,
+    required this.onSignOut,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final role = widget.role;
     final isAdmin = role == 'Super Admin';
-    final user = FirebaseAuth.instance.currentUser;
-    final title = isAdmin ? 'Super Admin Dashboard' : '$role Dashboard';
-    const allowedRoles = ['Individual', 'Employer', 'Trainer', 'Super Admin'];
+    final isEmployer = role == 'Employer';
+    final isTrainer = role == 'Trainer';
+
+    final title = isAdmin
+        ? 'Administrator Dashboard'
+        : isEmployer
+        ? 'Employer Dashboard'
+        : isTrainer
+        ? 'Trainer Dashboard'
+        : 'My Learning Dashboard';
+
+    final subtitle = isAdmin
+        ? 'Manage the MT Alchemy learning platform.'
+        : isEmployer
+        ? 'Explore learning solutions for your organisation.'
+        : isTrainer
+        ? 'Access learning resources and training tools.'
+        : 'Continue your learning and discover new resources.';
+
+    final items = <({IconData icon, String title, String description, String page})>[
+      (
+      icon: Icons.school_outlined,
+      title: 'Learning Hub',
+      description: 'Explore courses and professional learning resources.',
+      page: 'Learning Hub',
+      ),
+      (
+      icon: Icons.storefront_outlined,
+      title: 'Digital Store',
+      description: 'Browse digital guides, workbooks and resources.',
+      page: 'Digital Store',
+      ),
+      (
+      icon: Icons.business_center_outlined,
+      title: 'Services',
+      description: 'Discover training programmes and business services.',
+      page: 'Services',
+      ),
+      (
+      icon: Icons.mail_outline,
+      title: 'Contact Support',
+      description: 'Send an enquiry to the MT Alchemy team.',
+      page: 'Contact',
+      ),
+    ];
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      padding: const EdgeInsets.all(24),
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1100),
+          constraints: const BoxConstraints(maxWidth: 1120),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.all(28),
+                width: double.infinity,
+                padding: const EdgeInsets.all(30),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [navy, blue, purple]),
+                  gradient: const LinearGradient(
+                    colors: [navy, blue],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
                   borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: yellow.withValues(alpha: 0.45)),
                 ),
                 child: Wrap(
-                  spacing: 20,
-                  runSpacing: 20,
-                  crossAxisAlignment: WrapCrossAlignment.center,
                   alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 20,
+                  runSpacing: 18,
                   children: [
                     SizedBox(
                       width: 650,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          const Text(
+                            'MT ALCHEMY  /  YOUR WORKSPACE',
+                            style: TextStyle(
+                              color: yellow,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.4,
+                              fontSize: 11,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
                           Text(
                             title,
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold,
+                              fontSize: 30,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 10),
                           Text(
-                            'Welcome, ${user?.displayName?.isNotEmpty == true ? user!.displayName : (user?.email ?? role)}!',
+                            subtitle,
                             style: const TextStyle(
-                              color: yellow,
-                              fontSize: 17,
-                              fontWeight: FontWeight.bold,
+                              color: Colors.white70,
+                              height: 1.6,
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            isAdmin
-                                ? 'Manage registered users, search accounts, and maintain account roles.'
-                                : 'Access your MT Alchemy ${role.toLowerCase()} workspace.',
-                            style: const TextStyle(color: Colors.white70, height: 1.5),
+                          const SizedBox(height: 18),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 13,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: yellow.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(30),
+                              border: Border.all(
+                                color: yellow.withValues(alpha: 0.5),
+                              ),
+                            ),
+                            child: Text(
+                              'Account role: $role',
+                              style: const TextStyle(
+                                color: yellow,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
                         ],
                       ),
                     ),
-                    const Icon(
-                      Icons.admin_panel_settings_rounded,
-                      color: yellow,
-                      size: 64,
+                    FilledButton.icon(
+                      onPressed: onSignOut,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: yellow,
+                        foregroundColor: navy,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 16,
+                        ),
+                      ),
+                      icon: const Icon(Icons.logout_rounded),
+                      label: const Text('Sign out'),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 28),
-              Text(
-                isAdmin ? 'User Management' : 'Your workspace',
-                style: const TextStyle(
-                  fontSize: 24,
+              const SizedBox(height: 30),
+              const Text(
+                'Quick access',
+                style: TextStyle(
                   color: navy,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 25,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
               const SizedBox(height: 8),
-              Text(
-                isAdmin
-                    ? 'Live account profiles from Firestore. Search by name or email and change a user’s role.'
-                    : _roleDescription(role),
-                style: const TextStyle(color: Colors.black54, height: 1.6),
+              const Text(
+                'Choose a section to continue.',
+                style: TextStyle(color: Colors.black54),
               ),
-              const SizedBox(height: 18),
-              if (isAdmin) ...[
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: FilledButton.icon(
-                    onPressed: widget.onManageProducts,
-                    icon: const Icon(Icons.inventory_2_outlined),
-                    label: const Text('Manage Products'),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _searchController,
-                  onChanged: (value) => setState(() => _searchText = value.trim().toLowerCase()),
-                  decoration: InputDecoration(
-                    hintText: 'Search users by name, email, or role',
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: _searchText.isEmpty
-                        ? null
-                        : IconButton(
-                      tooltip: 'Clear search',
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() => _searchText = '');
-                      },
-                      icon: const Icon(Icons.close),
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: Color(0xFFE5E8F0)),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: Color(0xFFE5E8F0)),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                  stream: FirebaseFirestore.instance.collection('users').snapshots(),
-                  builder: (context, snapshot) {
-                    if (snapshot.hasError) {
-                      return const Card(
-                        child: Padding(
-                          padding: EdgeInsets.all(20),
-                          child: Text('Could not load users. Check your Firestore security rules and internet connection.'),
-                        ),
-                      );
-                    }
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(24),
-                          child: CircularProgressIndicator(),
-                        ),
-                      );
-                    }
-
-                    final allDocs = snapshot.data?.docs ?? [];
-                    final filteredDocs = allDocs.where((doc) {
-                      final data = doc.data();
-                      final searchable = [
-                        data['name'] ?? '',
-                        data['email'] ?? '',
-                        data['role'] ?? '',
-                        data['status'] ?? 'Active',
-                      ].join(' ').toLowerCase();
-                      return searchable.contains(_searchText);
-                    }).toList();
-
-                    final counts = <String, int>{};
-                    var activeCount = 0;
-                    var suspendedCount = 0;
-                    for (final doc in allDocs) {
-                      final data = doc.data();
-                      final userRole = (data['role'] ?? 'Unassigned').toString();
-                      final status = (data['status'] ?? 'Active').toString();
-                      counts[userRole] = (counts[userRole] ?? 0) + 1;
-                      if (status == 'Suspended') {
-                        suspendedCount++;
-                      } else {
-                        activeCount++;
-                      }
-                    }
-                    final recentDocs = [...allDocs]
-                      ..sort((a, b) {
-                        final aDate = a.data()['createdAt'];
-                        final bDate = b.data()['createdAt'];
-                        final aMillis = aDate is Timestamp ? aDate.millisecondsSinceEpoch : 0;
-                        final bMillis = bDate is Timestamp ? bDate.millisecondsSinceEpoch : 0;
-                        return bMillis.compareTo(aMillis);
-                      });
-
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: [
-                            _AdminStatCard(
-                              label: 'Total profiles',
-                              value: '${allDocs.length}',
-                              icon: Icons.people_alt_outlined,
-                            ),
-                            _AdminStatCard(
-                              label: 'Active accounts',
-                              value: '$activeCount',
-                              icon: Icons.verified_user_outlined,
-                            ),
-                            _AdminStatCard(
-                              label: 'Suspended accounts',
-                              value: '$suspendedCount',
-                              icon: Icons.block_outlined,
-                            ),
-                            _AdminStatCard(
-                              label: 'Super Admins',
-                              value: "${counts['Super Admin'] ?? 0}",
-                              icon: Icons.admin_panel_settings_outlined,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        _AdminAnalyticsPanel(
-                          totalUsers: allDocs.length,
-                          roleCounts: counts,
-                          recentDocs: recentDocs.take(5).toList(),
-                        ),
-                        const SizedBox(height: 20),
-                        if (filteredDocs.isEmpty)
-                          Card(
-                            color: Colors.white,
+              const SizedBox(height: 20),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final columns = constraints.maxWidth >= 850
+                      ? 4
+                      : constraints.maxWidth >= 560
+                      ? 2
+                      : 1;
+                  final width =
+                      (constraints.maxWidth - (columns - 1) * 16) / columns;
+                  return Wrap(
+                    spacing: 16,
+                    runSpacing: 16,
+                    children: items.map((item) {
+                      return SizedBox(
+                        width: width,
+                        child: Card(
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(18),
+                            onTap: () => onNavigate(item.page),
                             child: Padding(
-                              padding: const EdgeInsets.all(24),
-                              child: Text(
-                                allDocs.isEmpty
-                                    ? 'No user profiles found yet.'
-                                    : 'No users match “${_searchController.text}”.',
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          )
-                        else
-                          Card(
-                            color: Colors.white,
-                            clipBehavior: Clip.antiAlias,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.all(16),
-                                  child: Text(
-                                    'Showing ${filteredDocs.length} of ${allDocs.length} users',
-                                    style: const TextStyle(
-                                      color: Colors.black54,
-                                      fontWeight: FontWeight.w600,
+                              padding: const EdgeInsets.all(20),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: yellow.withValues(alpha: 0.16),
+                                      borderRadius: BorderRadius.circular(13),
+                                    ),
+                                    child: Icon(
+                                      item.icon,
+                                      color: navy,
+                                      size: 27,
                                     ),
                                   ),
-                                ),
-                                const Divider(height: 1),
-                                for (final doc in filteredDocs)
-                                  _AdminUserRow(
-                                    doc: doc,
-                                    currentUserId: user?.uid,
-                                    allowedRoles: allowedRoles,
-                                    isUpdating: _isUpdatingRole,
-                                    isUpdatingStatus: _isUpdatingStatus,
-                                    onRoleChanged: (newRole) => _changeUserRole(doc, newRole),
-                                    onStatusChanged: (newStatus) => _changeUserStatus(doc, newStatus),
+                                  const SizedBox(height: 18),
+                                  Text(
+                                    item.title,
+                                    style: const TextStyle(
+                                      color: navy,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 17,
+                                    ),
                                   ),
-                              ],
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    item.description,
+                                    style: const TextStyle(
+                                      color: Colors.black54,
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 14),
+                                  const Row(
+                                    children: [
+                                      Text(
+                                        'Open section',
+                                        style: TextStyle(
+                                          color: navy,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      SizedBox(width: 6),
+                                      Icon(
+                                        Icons.arrow_forward_rounded,
+                                        color: yellow,
+                                        size: 18,
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                      ],
-                    );
-                  },
-                ),
-                const SizedBox(height: 20),
-                const _ActivityLogPanel(),
-                if (_isUpdatingRole || _isUpdatingStatus) ...[
-                  const SizedBox(height: 12),
-                  const LinearProgressIndicator(),
-                ],
-              ] else if (role == 'Individual')
-                IndividualLearningDashboard(userId: user?.uid)
-              else
-                Wrap(
-                  spacing: 16,
-                  runSpacing: 16,
-                  children: [
-                    _DashboardTile(
-                      icon: Icons.school_outlined,
-                      title: role == 'Trainer' ? 'Training programmes' : 'Learning Hub',
-                      description: role == 'Trainer' ? 'Your training-management area.' : 'Explore learning content.',
-                    ),
-                    _DashboardTile(
-                      icon: Icons.person_outline,
-                      title: 'My Profile',
-                      description: 'Signed in as ${user?.email ?? 'your account'}.',
-                    ),
-                    if (role == 'Employer')
-                      const _DashboardTile(
-                        icon: Icons.groups_outlined,
-                        title: 'Team Training',
-                        description: 'Your organisation training area.',
-                      ),
-                  ],
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  static String _roleDescription(String role) {
-    switch (role) {
-      case 'Individual':
-        return 'Continue your learning journey and manage your profile.';
-      case 'Employer':
-        return 'Explore team learning and corporate training features.';
-      case 'Trainer':
-        return 'Manage your training workspace and learning programmes.';
-      default:
-        return 'Your MT Alchemy workspace.';
-    }
-  }
-}
-
-
-class _ActivityLogPanel extends StatelessWidget {
-  const _ActivityLogPanel();
-
-  String _timeLabel(dynamic value) {
-    if (value is! Timestamp) return 'Just now';
-    final date = value.toDate().toLocal();
-    final hour = date.hour.toString().padLeft(2, '0');
-    final minute = date.minute.toString().padLeft(2, '0');
-    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year} $hour:$minute';
-  }
-
-  IconData _iconFor(String action) {
-    if (action == 'Registered') return Icons.person_add_alt_1_outlined;
-    if (action == 'Role changed') return Icons.manage_accounts_outlined;
-    if (action == 'Account suspended') return Icons.block_outlined;
-    if (action == 'Account reactivated') return Icons.check_circle_outline;
-    return Icons.history;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      color: Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(
-              children: [
-                Icon(Icons.history_rounded, color: purple),
-                SizedBox(width: 10),
-                Expanded(child: Text('Activity Log', style: TextStyle(color: navy, fontSize: 19, fontWeight: FontWeight.bold))),
-              ],
-            ),
-            const SizedBox(height: 5),
-            const Text('Recent registrations and administrator account changes.', style: TextStyle(color: Colors.black54)),
-            const SizedBox(height: 12),
-            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance
-                  .collection('activity_logs')
-                  .orderBy('createdAt', descending: true)
-                  .limit(15)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Text('Could not load activity logs. Check the activity_logs Firestore rules.'),
-                  );
-                }
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-                final logs = snapshot.data?.docs ?? [];
-                if (logs.isEmpty) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 14),
-                    child: Text('No activity recorded yet. New registrations and admin changes will appear here.'),
-                  );
-                }
-                return Column(
-                  children: [
-                    for (final doc in logs) ...[
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: CircleAvatar(
-                          backgroundColor: purple.withValues(alpha: 0.10),
-                          child: Icon(_iconFor((doc.data()['action'] ?? '').toString()), color: purple, size: 21),
                         ),
-                        title: Text((doc.data()['action'] ?? 'Activity').toString(), style: const TextStyle(fontWeight: FontWeight.w600)),
-                        subtitle: Text(
-                          '${(doc.data()['targetName'] ?? doc.data()['targetEmail'] ?? 'User').toString()}'
-                              '${doc.data()['oldValue'] != null ? ' • ${doc.data()['oldValue']} → ${doc.data()['newValue']}' : ''}\n'
-                              'By ${(doc.data()['actorEmail'] ?? 'Unknown account').toString()}',
-                        ),
-                        trailing: SizedBox(
-                          width: 112,
-                          child: Text(_timeLabel(doc.data()['createdAt']), textAlign: TextAlign.end, style: const TextStyle(fontSize: 11, color: Colors.black54)),
-                        ),
-                        isThreeLine: true,
-                      ),
-                      const Divider(height: 1),
-                    ],
-                  ],
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-
-class _AdminAnalyticsPanel extends StatelessWidget {
-  final int totalUsers;
-  final Map<String, int> roleCounts;
-  final List<QueryDocumentSnapshot<Map<String, dynamic>>> recentDocs;
-
-  const _AdminAnalyticsPanel({
-    required this.totalUsers,
-    required this.roleCounts,
-    required this.recentDocs,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    const roleDetails = <String, IconData>{
-      'Individual': Icons.person_outline,
-      'Employer': Icons.business_outlined,
-      'Trainer': Icons.school_outlined,
-      'Super Admin': Icons.admin_panel_settings_outlined,
-    };
-    final roleColors = <String, Color>{
-      'Individual': navy,
-      'Employer': blue,
-      'Trainer': const Color(0xFF168A79),
-      'Super Admin': purple,
-    };
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final wide = constraints.maxWidth >= 760;
-        final roleChart = Card(
-          color: Colors.white,
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('User distribution', style: TextStyle(color: navy, fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 6),
-                const Text('Registered profiles by account role', style: TextStyle(color: Colors.black54)),
-                const SizedBox(height: 20),
-                for (final role in roleDetails.keys) ...[
-                  Row(
-                    children: [
-                      Icon(roleDetails[role], size: 19, color: roleColors[role]),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(role, style: const TextStyle(fontWeight: FontWeight.w600))),
-                      Text('${roleCounts[role] ?? 0}'),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: LinearProgressIndicator(
-                      minHeight: 9,
-                      value: totalUsers == 0 ? 0 : (roleCounts[role] ?? 0) / totalUsers,
-                      backgroundColor: const Color(0xFFECEFF5),
-                      valueColor: AlwaysStoppedAnimation<Color>(roleColors[role]!),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-              ],
-            ),
-          ),
-        );
-
-        final recentPanel = Card(
-          color: Colors.white,
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Recent registrations', style: TextStyle(color: navy, fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 6),
-                const Text('Latest profiles based on their creation date', style: TextStyle(color: Colors.black54)),
-                const SizedBox(height: 12),
-                if (recentDocs.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    child: Text('No registrations to display yet.'),
-                  )
-                else
-                  for (final doc in recentDocs)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: CircleAvatar(
-                        backgroundColor: purple.withValues(alpha: 0.10),
-                        child: const Icon(Icons.person_outline, color: purple),
-                      ),
-                      title: Text((doc.data()['name'] ?? 'Name not provided').toString(), maxLines: 1, overflow: TextOverflow.ellipsis),
-                      subtitle: Text((doc.data()['email'] ?? 'Email not provided').toString(), maxLines: 1, overflow: TextOverflow.ellipsis),
-                      trailing: Text((doc.data()['role'] ?? 'Unassigned').toString(), style: const TextStyle(color: purple, fontSize: 11, fontWeight: FontWeight.w600)),
-                    ),
-              ],
-            ),
-          ),
-        );
-
-        if (wide) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: roleChart),
-              const SizedBox(width: 16),
-              Expanded(child: recentPanel),
-            ],
-          );
-        }
-        return Column(children: [roleChart, recentPanel]);
-      },
-    );
-  }
-}
-
-class _AdminStatCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-
-  const _AdminStatCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 245,
-      child: Card(
-        color: Colors.white,
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: purple.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: purple),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(label, style: const TextStyle(color: Colors.black54, fontSize: 12)),
-                    const SizedBox(height: 5),
-                    Text(value, style: const TextStyle(color: navy, fontSize: 24, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AdminUserRow extends StatelessWidget {
-  final QueryDocumentSnapshot<Map<String, dynamic>> doc;
-  final String? currentUserId;
-  final List<String> allowedRoles;
-  final bool isUpdating;
-  final bool isUpdatingStatus;
-  final ValueChanged<String> onRoleChanged;
-  final ValueChanged<String> onStatusChanged;
-
-  const _AdminUserRow({
-    required this.doc,
-    required this.currentUserId,
-    required this.allowedRoles,
-    required this.isUpdating,
-    required this.isUpdatingStatus,
-    required this.onRoleChanged,
-    required this.onStatusChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final data = doc.data();
-    final name = (data['name'] ?? 'Name not provided').toString();
-    final email = (data['email'] ?? 'Email not provided').toString();
-    final role = (data['role'] ?? 'Unassigned').toString();
-    final status = (data['status'] ?? 'Active').toString();
-    final isCurrentUser = doc.id == currentUserId;
-    final roleOptions = allowedRoles.contains(role)
-        ? allowedRoles
-        : [...allowedRoles, role];
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: purple.withValues(alpha: 0.12),
-                foregroundColor: purple,
-                child: Text(
-                  name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : '?',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(name, style: const TextStyle(fontWeight: FontWeight.bold, color: navy)),
-                    const SizedBox(height: 4),
-                    Text(email, style: const TextStyle(color: Colors.black54)),
-                    if (isCurrentUser)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 4),
-                        child: Text('Your account', style: TextStyle(color: purple, fontSize: 12, fontWeight: FontWeight.w600)),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              const Text('Role: ', style: TextStyle(fontWeight: FontWeight.w600)),
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  initialValue: roleOptions.contains(role) ? role : 'Individual',
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    isDense: true,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    border: OutlineInputBorder(),
-                  ),
-                  items: roleOptions
-                      .map((item) => DropdownMenuItem<String>(
-                    value: item,
-                    child: Text(item),
-                  ))
-                      .toList(),
-                  onChanged: isCurrentUser || isUpdating
-                      ? null
-                      : (newRole) {
-                    if (newRole != null) onRoleChanged(newRole);
-                  },
-                ),
-              ),
-              if (isCurrentUser) ...[
-                const SizedBox(width: 8),
-                const Tooltip(
-                  message: 'Your own role cannot be changed here.',
-                  child: Icon(Icons.lock_outline, color: Colors.black45),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              const Text('Status: ', style: TextStyle(fontWeight: FontWeight.w600)),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: status == 'Suspended' ? const Color(0xFFFFE7E7) : const Color(0xFFE4F6EA),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  status,
-                  style: TextStyle(
-                    color: status == 'Suspended' ? Colors.red.shade800 : Colors.green.shade800,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              OutlinedButton.icon(
-                onPressed: isCurrentUser || isUpdatingStatus
-                    ? null
-                    : () => onStatusChanged(status == 'Suspended' ? 'Active' : 'Suspended'),
-                icon: Icon(status == 'Suspended' ? Icons.check_circle_outline : Icons.block),
-                label: Text(status == 'Suspended' ? 'Reactivate' : 'Suspend'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'User ID: ${doc.id}',
-            style: const TextStyle(fontSize: 10, color: Colors.black45),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class IndividualLearningDashboard extends StatelessWidget {
-  final String? userId;
-  const IndividualLearningDashboard({super.key, required this.userId});
-
-  Future<void> _showCertificate(
-      BuildContext context,
-      DocumentSnapshot<Map<String, dynamic>> doc,
-      ) async {
-    final data = doc.data() ?? <String, dynamic>{};
-    final progress = ((data['progress'] as num?)?.toInt() ?? 0).clamp(0, 100);
-    final passed = data['quizPassed'] == true;
-    if (!passed || progress < 100) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Complete the course and pass its quiz to earn a certificate.')),
-      );
-      return;
-    }
-
-    final user = FirebaseAuth.instance.currentUser;
-    final profileName = (user?.displayName ?? '').trim();
-    final learnerName = profileName.isNotEmpty
-        ? profileName
-        : ((user?.email ?? 'Learner').split('@').first);
-    final courseTitle = (data['title'] ?? 'Course').toString();
-    final completedAt = data['lastQuizAt'];
-    final date = completedAt is Timestamp ? completedAt.toDate() : DateTime.now();
-    final dateText = '${date.day.toString().padLeft(2, '0')} '
-        '${_monthName(date.month)} ${date.year}';
-    final uidPart = (user?.uid ?? 'USER').replaceAll(RegExp(r'[^A-Za-z0-9]'), '').toUpperCase();
-    final coursePart = doc.id.replaceAll(RegExp(r'[^A-Za-z0-9]'), '').toUpperCase();
-    final certificateId = 'MTA-${uidPart.substring(0, uidPart.length > 6 ? 6 : uidPart.length)}-'
-        '${coursePart.substring(0, coursePart.length > 8 ? 8 : coursePart.length)}';
-
-    // Store the minimal details needed for public certificate verification.
-    // In production, certificate issuance should be validated by trusted server code.
-    try {
-      final certificateRef = FirebaseFirestore.instance
-          .collection('certificates')
-          .doc(certificateId);
-      final existingCertificate = await certificateRef.get();
-
-      // Firestore rules make issued certificates immutable. Create the record
-      // once; opening the same certificate again must not attempt an update.
-      if (!existingCertificate.exists) {
-        await certificateRef.set({
-          'certificateId': certificateId,
-          'learnerName': learnerName,
-          'courseTitle': courseTitle,
-          'dateAwarded': dateText,
-          'userId': user!.uid,
-          'courseId': doc.id,
-          'valid': true,
-          'awardedAt': FieldValue.serverTimestamp(),
-        });
-      } else if (existingCertificate.data()?['userId'] != user?.uid ||
-          existingCertificate.data()?['courseId'] != doc.id) {
-        throw StateError('Certificate ID is already associated with another record.');
-      }
-    } catch (_) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Certificate preview is available, but verification details could not be saved. Check Firestore rules.')),
-      );
-    }
-
-    if (!context.mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => Dialog(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 680),
-          child: Container(
-            padding: const EdgeInsets.all(28),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFFEFA),
-              border: Border.all(color: yellow, width: 5),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.workspace_premium_rounded, color: purple, size: 56),
-                const SizedBox(height: 8),
-                const Text('MT ALCHEMY', style: TextStyle(color: navy, fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 3)),
-                const SizedBox(height: 12),
-                const Text('CERTIFICATE OF COMPLETION', textAlign: TextAlign.center, style: TextStyle(color: navy, fontSize: 25, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 18),
-                const Text('This certificate is proudly presented to', textAlign: TextAlign.center, style: TextStyle(color: Colors.black54, fontSize: 14)),
-                const SizedBox(height: 8),
-                Text(learnerName, textAlign: TextAlign.center, style: const TextStyle(color: purple, fontSize: 28, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 12),
-                const Text('for successfully completing the course', textAlign: TextAlign.center),
-                const SizedBox(height: 8),
-                Text(courseTitle, textAlign: TextAlign.center, style: const TextStyle(color: navy, fontSize: 21, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 16),
-                const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.verified_rounded, color: Colors.green, size: 20), SizedBox(width: 6), Text('Course completed and quiz passed', style: TextStyle(color: Colors.green, fontWeight: FontWeight.w600))]),
-                const SizedBox(height: 20),
-                Text('Date awarded: $dateText', style: const TextStyle(color: Colors.black54)),
-                const SizedBox(height: 6),
-                SelectableText('Certificate ID: $certificateId', style: const TextStyle(color: Colors.black54, fontSize: 12)),
-                const SizedBox(height: 22),
-                Wrap(
-                  alignment: WrapAlignment.end,
-                  spacing: 10,
-                  runSpacing: 8,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: () => _downloadCertificatePdf(
-                        context: context,
-                        learnerName: learnerName,
-                        courseTitle: courseTitle,
-                        dateText: dateText,
-                        certificateId: certificateId,
-                      ),
-                      icon: const Icon(Icons.picture_as_pdf_outlined),
-                      label: const Text('Download PDF'),
-                    ),
-                    FilledButton(
-                      onPressed: () => Navigator.pop(dialogContext),
-                      child: const Text('Close certificate'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-
-  Future<void> _downloadCertificatePdf({
-    required BuildContext context,
-    required String learnerName,
-    required String courseTitle,
-    required String dateText,
-    required String certificateId,
-  }) async {
-    final document = pw.Document();
-    const darkNavy = PdfColor.fromInt(0xFF142B55);
-    const accentPurple = PdfColor.fromInt(0xFF7555B7);
-    const gold = PdfColor.fromInt(0xFFFFD66B);
-
-    document.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4.landscape,
-        margin: const pw.EdgeInsets.all(24),
-        build: (pageContext) => pw.Container(
-          decoration: pw.BoxDecoration(
-            border: pw.Border.all(color: gold, width: 5),
-          ),
-          padding: const pw.EdgeInsets.all(30),
-          child: pw.Center(
-            child: pw.Column(
-              mainAxisAlignment: pw.MainAxisAlignment.center,
-              crossAxisAlignment: pw.CrossAxisAlignment.center,
-              children: [
-                pw.Text(
-                  'MT ALCHEMY',
-                  style: pw.TextStyle(
-                    color: accentPurple,
-                    fontSize: 16,
-                    fontWeight: pw.FontWeight.bold,
-                    letterSpacing: 3,
-                  ),
-                ),
-                pw.SizedBox(height: 18),
-                pw.Text(
-                  'CERTIFICATE OF COMPLETION',
-                  textAlign: pw.TextAlign.center,
-                  style: pw.TextStyle(
-                    color: darkNavy,
-                    fontSize: 27,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-                pw.SizedBox(height: 22),
-                pw.Text(
-                  'This certificate is proudly presented to',
-                  style: const pw.TextStyle(fontSize: 13),
-                ),
-                pw.SizedBox(height: 10),
-                pw.Text(
-                  learnerName,
-                  textAlign: pw.TextAlign.center,
-                  style: pw.TextStyle(
-                    color: accentPurple,
-                    fontSize: 25,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-                pw.SizedBox(height: 12),
-                pw.Text(
-                  'for successfully completing the course',
-                  style: const pw.TextStyle(fontSize: 13),
-                ),
-                pw.SizedBox(height: 8),
-                pw.Text(
-                  courseTitle,
-                  textAlign: pw.TextAlign.center,
-                  style: pw.TextStyle(
-                    color: darkNavy,
-                    fontSize: 21,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-                pw.SizedBox(height: 15),
-                pw.Text(
-                  'COURSE COMPLETED - QUIZ PASSED',
-                  style: pw.TextStyle(
-                    color: PdfColors.green700,
-                    fontSize: 12,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-                pw.SizedBox(height: 20),
-                pw.Text('Date awarded: $dateText',
-                    style: const pw.TextStyle(fontSize: 11)),
-                pw.SizedBox(height: 6),
-                pw.Text('Certificate ID: $certificateId',
-                    style: const pw.TextStyle(fontSize: 10)),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-
-    try {
-      await Printing.layoutPdf(
-        name: 'MT_Alchemy_Certificate_${certificateId.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '')}.pdf',
-        onLayout: (format) async => document.save(),
-      );
-    } catch (_) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not create the PDF. Please try again.'),
-        ),
-      );
-    }
-  }
-
-  String _monthName(int month) {
-    const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
-    ];
-    return months[month - 1];
-  }
-
-
-  String _courseId(Course course) => course.title
-      .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
-      .replaceAll(RegExp(r'^_|_$'), '');
-
-  Future<void> _enrol(BuildContext context, Course course) async {
-    final uid = userId;
-    if (uid == null) return;
-    final id = _courseId(course);
-    try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .collection('enrollments')
-          .doc(id)
-          .set({
-        'courseId': id,
-        'title': course.title,
-        'category': course.category,
-        'progress': 0,
-        'enrolledAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Enrolled in ${course.title}.')),
-      );
-    } on FirebaseException catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.code == 'permission-denied'
-            ? 'Enrollment was blocked by Firestore rules. Add the enrollment rules shown with this update.'
-            : 'Could not enrol in this course. Please try again.')),
-      );
-    }
-  }
-
-  Future<void> _openLessons(
-      BuildContext context,
-      DocumentSnapshot<Map<String, dynamic>> doc,
-      ) async {
-    final data = doc.data() ?? <String, dynamic>{};
-    final title = (data['title'] ?? 'Course').toString();
-    final progress = ((data['progress'] as num?)?.toInt() ?? 0).clamp(0, 100);
-    final completedLessons = (progress ~/ 25).clamp(0, 4);
-    final lessons = <Map<String, String>>[
-      {'title': 'Lesson 1: Introduction', 'body': 'Understand the course goals, key concepts, and how the topic applies in a professional setting.'},
-      {'title': 'Lesson 2: Core principles', 'body': 'Explore the main principles and vocabulary. Identify two ideas you can apply in your work or studies.'},
-      {'title': 'Lesson 3: Practical application', 'body': 'Work through a practical scenario and identify the steps needed to apply what you have learned.'},
-      {'title': 'Lesson 4: Review and action plan', 'body': 'Review the key takeaways and create a short action plan for applying these skills.'},
-    ];
-
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(title),
-        content: SizedBox(
-          width: 520,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Course lessons', style: TextStyle(fontWeight: FontWeight.bold, color: navy, fontSize: 17)),
-                const SizedBox(height: 8),
-                Text('Progress: $progress%', style: const TextStyle(color: purple, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 12),
-                for (var i = 0; i < lessons.length; i++)
-                  Card(
-                    color: i < completedLessons ? const Color(0xFFEAF7EF) : Colors.white,
-                    child: ExpansionTile(
-                      leading: Icon(i < completedLessons ? Icons.check_circle : Icons.play_circle_outline, color: i < completedLessons ? Colors.green : purple),
-                      title: Text(lessons[i]['title']!),
-                      subtitle: Text(i < completedLessons ? 'Completed' : 'Lesson ${i + 1}'),
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(lessons[i]['body']!, style: const TextStyle(height: 1.6)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                const SizedBox(height: 8),
-                const Text('These are sample reading lessons for the course prototype. Progress is saved to Firestore.', style: TextStyle(color: Colors.black54, fontSize: 12)),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Close')),
-          OutlinedButton.icon(
-            onPressed: progress >= 100 ? () {
-              Navigator.pop(dialogContext);
-              _openQuiz(context, doc);
-            } : null,
-            icon: Icon(progress >= 100 ? Icons.quiz_outlined : Icons.lock_outline),
-            label: const Text('Take quiz'),
-          ),
-          if (progress < 100)
-            FilledButton.icon(
-              onPressed: () async {
-                Navigator.pop(dialogContext);
-                await _advanceProgress(context, doc);
-              },
-              icon: const Icon(Icons.check_circle_outline),
-              label: Text(progress == 75 ? 'Complete course' : 'Complete next lesson'),
-            )
-          else
-            const Chip(avatar: Icon(Icons.verified, size: 18), label: Text('Course completed')),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _openQuiz(
-      BuildContext context,
-      DocumentSnapshot<Map<String, dynamic>> doc,
-      ) async {
-    final uid = userId;
-    if (uid == null) return;
-    final data = doc.data() ?? <String, dynamic>{};
-    final title = (data['title'] ?? 'Course').toString();
-    final progress = ((data['progress'] as num?)?.toInt() ?? 0).clamp(0, 100);
-    if (progress < 100) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Complete all four lessons before taking the quiz.')),
-      );
-      return;
-    }
-    final questions = <Map<String, dynamic>>[
-      {
-        'question': 'What is the main purpose of learning objectives?',
-        'options': ['To clarify what learners should achieve', 'To make a course longer', 'To replace practice', 'To avoid feedback'],
-        'answer': 0,
-      },
-      {
-        'question': 'Which action best supports applying a new skill?',
-        'options': ['Ignore it after reading', 'Practise it in a realistic scenario', 'Memorise the heading only', 'Skip reflection'],
-        'answer': 1,
-      },
-      {
-        'question': 'What is constructive feedback intended to do?',
-        'options': ['Blame the learner', 'Compare people unfairly', 'Help identify improvements', 'End the learning process'],
-        'answer': 2,
-      },
-      {
-        'question': 'What is a useful final step after a course?',
-        'options': ['Forget the content', 'Create an action plan', 'Delete all notes', 'Avoid using the skills'],
-        'answer': 1,
-      },
-    ];
-    final answers = List<int?>.filled(questions.length, null);
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => AlertDialog(
-          title: Text('$title — Course Quiz'),
-          content: SizedBox(
-            width: 560,
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Answer all four questions. You need at least 3 correct answers (75%) to pass.'),
-                  const SizedBox(height: 14),
-                  for (var i = 0; i < questions.length; i++) ...[
-                    Text('${i + 1}. ${questions[i]['question']}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    for (var j = 0; j < (questions[i]['options'] as List<String>).length; j++)
-                      RadioListTile<int>(
-                        contentPadding: EdgeInsets.zero,
-                        dense: true,
-                        title: Text((questions[i]['options'] as List<String>)[j]),
-                        value: j,
-                        groupValue: answers[i],
-                        onChanged: (value) => setDialogState(() => answers[i] = value),
-                      ),
-                    const Divider(),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
-            FilledButton(
-              onPressed: answers.any((answer) => answer == null) ? null : () async {
-                final score = List<int>.generate(questions.length, (i) => answers[i] == questions[i]['answer'] ? 1 : 0).fold<int>(0, (sum, value) => sum + value);
-                final percent = ((score / questions.length) * 100).round();
-                final passed = percent >= 75;
-                Navigator.pop(dialogContext);
-                try {
-                  await doc.reference.update({
-                    'quizScore': percent,
-                    'quizPassed': passed,
-                    'quizAttempts': FieldValue.increment(1),
-                    'lastQuizAt': FieldValue.serverTimestamp(),
-                    'updatedAt': FieldValue.serverTimestamp(),
-                  });
-                  if (!context.mounted) return;
-                  await showDialog<void>(
-                    context: context,
-                    builder: (resultContext) => AlertDialog(
-                      icon: Icon(passed ? Icons.emoji_events_rounded : Icons.menu_book_rounded, color: passed ? Colors.green : purple, size: 44),
-                      title: Text(passed ? 'Quiz passed!' : 'Keep practising'),
-                      content: Text('Your score: $score/${questions.length} ($percent%). ${passed ? 'You passed this course quiz.' : 'You need at least 75% to pass. Review the lessons and try again.'}'),
-                      actions: [FilledButton(onPressed: () => Navigator.pop(resultContext), child: const Text('Done'))],
-                    ),
+                      );
+                    }).toList(),
                   );
-                } on FirebaseException catch (e) {
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.code == 'permission-denied' ? 'Quiz result was blocked by Firestore rules. Update the enrollment rules to allow quiz fields.' : 'Could not save your quiz result. Please try again.')));
-                }
-              },
-              child: const Text('Submit quiz'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _advanceProgress(
-      BuildContext context,
-      DocumentSnapshot<Map<String, dynamic>> doc,
-      ) async {
-    final uid = userId;
-    if (uid == null) return;
-    final current = (doc.data()?['progress'] as num?)?.toInt() ?? 0;
-    final next = (current + 25).clamp(0, 100);
-    try {
-      await doc.reference.update({
-        'progress': next,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(next == 100 ? 'Course completed!' : 'Learning progress updated to $next%.')),
-      );
-    } on FirebaseException catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.code == 'permission-denied'
-            ? 'Progress update was blocked by Firestore rules. Add the enrollment rules shown with this update.'
-            : 'Could not update progress. Please try again.')),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final uid = userId;
-    if (uid == null) {
-      return const Card(child: Padding(padding: EdgeInsets.all(20), child: Text('Please sign in to view your learning dashboard.')));
-    }
-    final enrollmentCollection = FirebaseFirestore.instance
-        .collection('users').doc(uid).collection('enrollments');
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: enrollmentCollection.snapshots(),
-          builder: (context, snapshot) {
-            final enrolled = snapshot.data?.docs ?? [];
-            final completed = enrolled.where((doc) => ((doc.data()['progress'] as num?)?.toInt() ?? 0) >= 100).length;
-            final inProgress = enrolled.length - completed;
-            return Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                _AdminStatCard(label: 'Enrolled courses', value: '${enrolled.length}', icon: Icons.menu_book_outlined),
-                _AdminStatCard(label: 'In progress', value: '$inProgress', icon: Icons.timelapse_rounded),
-                _AdminStatCard(label: 'Completed', value: '$completed', icon: Icons.task_alt_rounded),
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: 24),
-        const Text('My Learning', style: TextStyle(fontSize: 21, color: navy, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 12),
-        StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: enrollmentCollection.orderBy('enrolledAt', descending: true).snapshots(),
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              return const Card(child: Padding(padding: EdgeInsets.all(18), child: Text('Could not load your courses. Check the enrollment Firestore rules.')));
-            }
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator()));
-            }
-            final docs = snapshot.data?.docs ?? [];
-            if (docs.isEmpty) {
-              return const Card(color: Colors.white, child: Padding(padding: EdgeInsets.all(20), child: Text('You have not enrolled in a course yet. Choose a course below to get started.')));
-            }
-            return Column(
-              children: docs.map((doc) {
-                final data = doc.data();
-                final progress = ((data['progress'] as num?)?.toInt() ?? 0).clamp(0, 100);
-                return Card(
-                  color: Colors.white,
+                },
+              ),
+              if (isAdmin) ...[
+                const SizedBox(height: 28),
+                Card(
                   child: Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Row(children: [
-                        const Icon(Icons.menu_book_rounded, color: purple, size: 30),
-                        const SizedBox(width: 12),
-                        Expanded(child: Text((data['title'] ?? 'Course').toString(), style: const TextStyle(color: navy, fontSize: 17, fontWeight: FontWeight.bold))),
-                        Text('$progress%', style: const TextStyle(color: purple, fontWeight: FontWeight.bold)),
-                      ]),
-                      const SizedBox(height: 12),
-                      ClipRRect(borderRadius: BorderRadius.circular(20), child: LinearProgressIndicator(value: progress / 100, minHeight: 8, backgroundColor: const Color(0xFFE8EAF1), color: purple)),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          Text(progress >= 100 ? 'Completed' : 'Keep learning', style: const TextStyle(color: Colors.black54)),
-                          OutlinedButton.icon(
-                            onPressed: () => _openLessons(context, doc),
-                            icon: const Icon(Icons.menu_book_outlined),
-                            label: const Text('Open lessons'),
-                          ),
-                          if (progress >= 100)
-                            const Chip(avatar: Icon(Icons.verified, size: 18), label: Text('Completed')),
-                        ],
-                      ),
-                    ]),
-                  ),
-                );
-              }).toList(),
-            );
-          },
-        ),
-        const SizedBox(height: 24),
-        const Text('Quiz Results', style: TextStyle(fontSize: 21, color: navy, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 12),
-        StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: enrollmentCollection.snapshots(),
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              return const Card(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text('Could not load quiz results. Please check your Firestore rules.'),
-                ),
-              );
-            }
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Padding(
-                padding: EdgeInsets.all(12),
-                child: Center(child: CircularProgressIndicator()),
-              );
-            }
-            final results = (snapshot.data?.docs ?? [])
-                .where((doc) => doc.data().containsKey('quizScore'))
-                .toList()
-              ..sort((a, b) {
-                final aDate = a.data()['lastQuizAt'];
-                final bDate = b.data()['lastQuizAt'];
-                if (aDate is Timestamp && bDate is Timestamp) {
-                  return bDate.compareTo(aDate);
-                }
-                return 0;
-              });
-            if (results.isEmpty) {
-              return const Card(
-                color: Colors.white,
-                child: Padding(
-                  padding: EdgeInsets.all(18),
-                  child: Row(
-                    children: [
-                      Icon(Icons.quiz_outlined, color: purple, size: 30),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Text('No quiz results yet. Complete a course and submit its quiz to see your score here.'),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }
-            return Column(
-              children: results.map((doc) {
-                final data = doc.data();
-                final score = (data['quizScore'] as num?)?.toInt() ?? 0;
-                final passed = data['quizPassed'] == true;
-                final attempts = (data['quizAttempts'] as num?)?.toInt() ?? 1;
-                final lastQuizAt = data['lastQuizAt'];
-                final dateText = lastQuizAt is Timestamp
-                    ? '${lastQuizAt.toDate().day.toString().padLeft(2, '0')}/'
-                    '${lastQuizAt.toDate().month.toString().padLeft(2, '0')}/'
-                    '${lastQuizAt.toDate().year}'
-                    : 'Just submitted';
-                return Card(
-                  color: Colors.white,
-                  child: Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    padding: const EdgeInsets.all(22),
+                    child: Row(
                       children: [
-                        Row(
-                          children: [
-                            Icon(
-                              passed ? Icons.emoji_events_rounded : Icons.quiz_outlined,
-                              color: passed ? Colors.green : purple,
-                              size: 30,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                (data['title'] ?? 'Course').toString(),
-                                style: const TextStyle(color: navy, fontSize: 16, fontWeight: FontWeight.bold),
+                        const Icon(Icons.admin_panel_settings_outlined,
+                            color: navy, size: 32),
+                        const SizedBox(width: 14),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Administrator access',
+                                style: TextStyle(
+                                  color: navy,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 17,
+                                ),
                               ),
-                            ),
-                            Text(
-                              '$score%',
-                              style: TextStyle(
-                                color: passed ? Colors.green.shade700 : Colors.deepOrange.shade700,
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
+                              SizedBox(height: 5),
+                              Text(
+                                'Your account is recognised as Super Admin. '
+                                    'Administrative data-management tools must be '
+                                    'connected to secured backend operations before use.',
+                                style: TextStyle(
+                                  color: Colors.black54,
+                                  height: 1.5,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(20),
-                          child: LinearProgressIndicator(
-                            value: (score.clamp(0, 100)) / 100,
-                            minHeight: 7,
-                            backgroundColor: const Color(0xFFE8EAF1),
-                            color: passed ? Colors.green : Colors.deepOrange,
+                            ],
                           ),
-                        ),
-                        const SizedBox(height: 10),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            Chip(
-                              avatar: Icon(passed ? Icons.check_circle : Icons.refresh, size: 18),
-                              label: Text(passed ? 'Passed' : 'Not passed'),
-                            ),
-                            Chip(label: Text('Attempts: $attempts')),
-                            Chip(label: Text('Last attempt: $dateText')),
-                            if (passed && ((data['progress'] as num?)?.toInt() ?? 0) >= 100)
-                              FilledButton.icon(
-                                onPressed: () => _showCertificate(context, doc),
-                                icon: const Icon(Icons.workspace_premium_outlined),
-                                label: const Text('View certificate'),
-                              ),
-                          ],
                         ),
                       ],
                     ),
                   ),
-                );
-              }).toList(),
-            );
-          },
+                ),
+              ],
+              const SizedBox(height: 35),
+              const SiteFooter(),
+            ],
+          ),
         ),
-        const SizedBox(height: 24),
-        const Text('Explore Courses', style: TextStyle(fontSize: 21, color: navy, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 16,
-          runSpacing: 16,
-          children: courses.map((course) {
-            final id = _courseId(course);
-            return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-              stream: enrollmentCollection.doc(id).snapshots(),
-              builder: (context, snapshot) {
-                final isEnrolled = snapshot.data?.exists ?? false;
-                final progress = ((snapshot.data?.data()?['progress'] as num?)?.toInt() ?? 0).clamp(0, 100);
-                return SizedBox(
-                  width: 310,
-                  child: Card(
-                    color: Colors.white,
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Container(width: 48, height: 48, decoration: BoxDecoration(color: course.color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(14)), child: Icon(course.icon, color: course.color)),
-                        const SizedBox(height: 14),
-                        Text(course.title, style: const TextStyle(color: navy, fontSize: 17, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 6),
-                        Text(course.category, style: const TextStyle(color: purple, fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 8),
-                        Text(course.description, style: const TextStyle(color: Colors.black54, height: 1.5)),
-                        const SizedBox(height: 14),
-                        SizedBox(
-                          width: double.infinity,
-                          child: isEnrolled
-                              ? OutlinedButton.icon(onPressed: null, icon: Icon(progress >= 100 ? Icons.task_alt : Icons.check_circle_outline), label: Text(progress >= 100 ? 'Completed' : 'Enrolled'))
-                              : FilledButton.icon(onPressed: () => _enrol(context, course), icon: const Icon(Icons.add_circle_outline), label: const Text('Enrol in course')),
-                        ),
-                      ]),
-                    ),
-                  ),
-                );
-              },
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 20),
-        const Text('Progress is a prototype tracker: each lesson-complete action advances progress by 25%.', style: TextStyle(color: Colors.black54, fontSize: 12)),
-      ],
+      ),
     );
   }
-}
-
-class _DashboardTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String description;
-  const _DashboardTile({required this.icon, required this.title, required this.description});
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    width: 300,
-    child: Card(
-      color: Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(22),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Icon(icon, color: purple, size: 34),
-          const SizedBox(height: 14),
-          Text(title, style: const TextStyle(color: navy, fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Text(description, style: const TextStyle(color: Colors.black54, height: 1.5)),
-        ]),
-      ),
-    ),
-  );
 }
 
 // -------------------- CONTACT PAGE --------------------
 
-// Reusable website widgets restored from the previous working source.
+class ContactPage extends StatefulWidget {
+  const ContactPage({super.key});
+
+  @override
+  State<ContactPage> createState() => _ContactPageState();
+}
+
+class _ContactPageState extends State<ContactPage> {
+  final formKey = GlobalKey<FormState>();
+  final nameController = TextEditingController();
+  final emailController = TextEditingController();
+  final messageController = TextEditingController();
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    emailController.dispose();
+    messageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          const PageBanner(
+            title: 'Contact Us',
+            subtitle:
+            'Tell us about your learning goals or corporate training needs.',
+          ),
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 650),
+              padding: const EdgeInsets.all(28),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: const Color(0xFFE8E2D5)),
+              ),
+              child: Form(
+                key: formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'Send us an enquiry',
+                      style: TextStyle(
+                        fontSize: 25,
+                        fontWeight: FontWeight.bold,
+                        color: navy,
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    TextFormField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Full name',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.person_outline),
+                      ),
+                      validator: (value) =>
+                      value == null || value.trim().isEmpty
+                          ? 'Please enter your name'
+                          : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(
+                        labelText: 'Email address',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.email_outlined),
+                      ),
+                      validator: (value) {
+                        if (value == null ||
+                            !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+                                .hasMatch(value.trim())) {
+                          return 'Please enter a valid email address';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: messageController,
+                      maxLines: 5,
+                      decoration: const InputDecoration(
+                        labelText: 'How can we help?',
+                        alignLabelWithHint: true,
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (value) =>
+                      value == null || value.trim().length < 10
+                          ? 'Please enter at least 10 characters'
+                          : null,
+                    ),
+                    const SizedBox(height: 20),
+                    FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: navy,
+                        padding: const EdgeInsets.all(18),
+                      ),
+                      onPressed: () {
+                        if (formKey.currentState!.validate()) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Form validated. Saving enquiries requires a backend.',
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                      child: const Text('Submit Enquiry'),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'This prototype does not send or save your enquiry yet.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.black54, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SiteFooter(),
+        ],
+      ),
+    );
+  }
+}
+
+// -------------------- REUSABLE WIDGETS --------------------
 
 class PageBanner extends StatelessWidget {
   final String title;
   final String subtitle;
 
-  PageBanner({
+  const PageBanner({
     super.key,
     required this.title,
     required this.subtitle,
@@ -4549,7 +1967,7 @@ class PageBanner extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [navy, purple],
+          colors: [navy, blue, yellow],
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
         ),
@@ -4589,7 +2007,7 @@ class SectionHeading extends StatelessWidget {
   final String title;
   final String subtitle;
 
-  SectionHeading({
+  const SectionHeading({
     super.key,
     required this.eyebrow,
     required this.title,
@@ -4875,7 +2293,7 @@ class ServiceCard extends StatelessWidget {
 }
 
 class SiteFooter extends StatelessWidget {
-  SiteFooter({super.key});
+  const SiteFooter({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -4953,7 +2371,7 @@ class _RegisterPageState extends State<RegisterPage> {
   Future<void> register() async {
     if (!formKey.currentState!.validate()) return;
 
-// Public registration must never create a Super Admin account.
+    // Public sign-up is limited to non-administrator roles.
     const allowedRegistrationRoles = <String>{
       'Individual',
       'Employer',
@@ -4962,7 +2380,7 @@ class _RegisterPageState extends State<RegisterPage> {
     if (!allowedRegistrationRoles.contains(selectedRole)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('This account type cannot be selected during registration.'),
+          content: Text('Super Admin accounts must be provisioned by an administrator.'),
         ),
       );
       return;
@@ -4992,13 +2410,6 @@ class _RegisterPageState extends State<RegisterPage> {
           'createdAt': FieldValue.serverTimestamp(),
         });
 
-        await writeActivityLog(
-          action: 'Registered',
-          targetUid: user.uid,
-          targetName: nameController.text.trim(),
-          targetEmail: emailController.text.trim(),
-          newValue: selectedRole,
-        );
         await user.updateDisplayName(nameController.text.trim());
       }
 
@@ -5052,8 +2463,8 @@ class _RegisterPageState extends State<RegisterPage> {
 
 
   Future<void> navigateToLogin() async {
-// Firebase automatically signs in the user after account creation.
-// Sign out so they can use the Sign In page normally.
+    // Firebase automatically signs in the user after account creation.
+    // Sign out so they can use the Sign In page normally.
     await FirebaseAuth.instance.signOut();
 
     if (!mounted) return;
@@ -5075,7 +2486,7 @@ class _RegisterPageState extends State<RegisterPage> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFFE5E8F0)),
+            border: Border.all(color: const Color(0xFFE8E2D5)),
           ),
           child: Form(
             key: formKey,
@@ -5108,10 +2519,23 @@ class _RegisterPageState extends State<RegisterPage> {
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: nameController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: 'Enter your full name',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.person_outline),
+                    prefixIcon: const Icon(Icons.person_outline),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFE2DED4)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                        color: yellow,
+                        width: 2,
+                      ),
+                    ),
                   ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
@@ -5125,8 +2549,21 @@ class _RegisterPageState extends State<RegisterPage> {
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
                   initialValue: selectedRole,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFE2DED4)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                        color: yellow,
+                        width: 2,
+                      ),
+                    ),
                   ),
                   items: const [
                     DropdownMenuItem(
@@ -5242,606 +2679,3 @@ class _RegisterPageState extends State<RegisterPage> {
     );
   }
 }
-
-
-
-
-
-class CertificateVerificationPage extends StatefulWidget {
-  const CertificateVerificationPage({super.key});
-
-  @override
-  State<CertificateVerificationPage> createState() => _CertificateVerificationPageState();
-}
-
-class _CertificateVerificationPageState extends State<CertificateVerificationPage> {
-  final TextEditingController _controller = TextEditingController();
-  bool _loading = false;
-  bool _searched = false;
-  Map<String, dynamic>? _certificate;
-  String? _error;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  Future<void> _verify() async {
-    final id = _controller.text.trim().toUpperCase();
-    if (id.isEmpty) {
-      setState(() { _searched = true; _certificate = null; _error = 'Enter a certificate ID.'; });
-      return;
-    }
-    setState(() { _loading = true; _searched = true; _certificate = null; _error = null; });
-    try {
-      final result = await FirebaseFirestore.instance.collection('certificates').doc(id).get();
-      if (!mounted) return;
-      final data = result.data();
-      setState(() {
-        _certificate = result.exists && data?['valid'] == true ? data : null;
-        _error = (result.exists && data?['valid'] == true)
-            ? null
-            : 'No valid certificate was found for this ID.';
-        _loading = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() { _error = 'Could not verify this certificate. Please try again later.'; _loading = false; });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final certificate = _certificate;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 38),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 760),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Icon(Icons.verified_user_outlined, color: purple, size: 58),
-              const SizedBox(height: 12),
-              const Text('Certificate Verification', textAlign: TextAlign.center,
-                  style: TextStyle(color: navy, fontSize: 30, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              const Text('Check whether an MT Alchemy certificate ID exists in our verification records.',
-                  textAlign: TextAlign.center, style: TextStyle(color: Colors.black54, fontSize: 15)),
-              const SizedBox(height: 28),
-              Card(
-                color: Colors.white,
-                child: Padding(
-                  padding: const EdgeInsets.all(22),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Text('Certificate ID', style: TextStyle(color: navy, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _controller,
-                        textCapitalization: TextCapitalization.characters,
-                        decoration: const InputDecoration(
-                          hintText: 'Example: MTA-ABC123-COURSE01',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.badge_outlined),
-                        ),
-                        onSubmitted: (_) => _verify(),
-                      ),
-                      const SizedBox(height: 14),
-                      FilledButton.icon(
-                        onPressed: _loading ? null : _verify,
-                        icon: _loading
-                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                            : const Icon(Icons.search),
-                        label: Text(_loading ? 'Checking...' : 'Verify certificate'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              if (_searched && !_loading) ...[
-                const SizedBox(height: 18),
-                if (certificate != null)
-                  Card(
-                    color: Colors.white,
-                    child: Padding(
-                      padding: const EdgeInsets.all(22),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Row(children: [Icon(Icons.check_circle, color: Colors.green, size: 30), SizedBox(width: 10), Expanded(child: Text('Certificate record found', style: TextStyle(color: Colors.green, fontSize: 20, fontWeight: FontWeight.bold)))]),
-                          const Divider(height: 28),
-                          _verificationDetail('Learner', (certificate['learnerName'] ?? 'Not available').toString()),
-                          _verificationDetail('Course', (certificate['courseTitle'] ?? 'Not available').toString()),
-                          _verificationDetail('Date awarded', (certificate['dateAwarded'] ?? 'Not available').toString()),
-                          _verificationDetail('Certificate ID', (certificate['certificateId'] ?? '').toString()),
-                          const SizedBox(height: 12),
-                          const Text('This confirms a matching record exists in the MT Alchemy database. For high-stakes verification, contact the issuing organisation.', style: TextStyle(color: Colors.black54, fontSize: 12)),
-                        ],
-                      ),
-                    ),
-                  )
-                else
-                  Card(
-                    color: Colors.white,
-                    child: Padding(
-                      padding: const EdgeInsets.all(18),
-                      child: Row(children: [const Icon(Icons.error_outline, color: Colors.deepOrange, size: 28), const SizedBox(width: 12), Expanded(child: Text(_error ?? 'No valid certificate was found.'))]),
-                    ),
-                  ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _verificationDetail(String label, String value) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 7),
-    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      SizedBox(width: 135, child: Text(label, style: const TextStyle(color: Colors.black54))),
-      Expanded(child: SelectableText(value, style: const TextStyle(color: navy, fontWeight: FontWeight.w600))),
-    ]),
-  );
-}
-
-class InsightsPage extends StatelessWidget {
-  const InsightsPage({super.key});
-
-  static const _articles = <Map<String, String>>[
-    {
-      'category': 'Emotional Intelligence',
-      'title': 'Building Emotional Intelligence at Work',
-      'summary': 'Practical ways to recognise emotions, respond thoughtfully, and strengthen workplace relationships.',
-      'read': '5 min read',
-    },
-    {
-      'category': 'Leadership',
-      'title': 'Leading with Empathy and Clarity',
-      'summary': 'Create trust through active listening, clear expectations, and consistent communication.',
-      'read': '4 min read',
-    },
-    {
-      'category': 'Mindfulness',
-      'title': 'Small Mindfulness Practices for Busy Teams',
-      'summary': 'Simple pauses that can help teams reset attention and approach challenges more intentionally.',
-      'read': '3 min read',
-    },
-    {
-      'category': 'Communication',
-      'title': 'Making Feedback More Constructive',
-      'summary': 'A respectful framework for sharing specific observations and agreeing on next steps.',
-      'read': '6 min read',
-    },
-    {
-      'category': 'Workplace Well-being',
-      'title': 'Creating Space for Team Well-being',
-      'summary': 'How regular check-ins and shared norms can support a healthier working environment.',
-      'read': '5 min read',
-    },
-    {
-      'category': 'Personal Development',
-      'title': 'Turn Reflection into Action',
-      'summary': 'Use a short reflection routine to identify learning, choose a next step, and review progress.',
-      'read': '4 min read',
-    },
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          PageBanner(
-            title: 'Insights',
-            subtitle: 'Ideas and resources for emotional intelligence, leadership, mindfulness, and thriving workplaces.',
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1120),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Explore our latest thinking', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: navy)),
-                    const SizedBox(height: 8),
-                    const Text('Browse practical learning ideas for individuals, teams, and organisations.', style: TextStyle(color: Colors.black54, height: 1.5)),
-                    const SizedBox(height: 24),
-                    LayoutBuilder(builder: (context, constraints) {
-                      final columns = constraints.maxWidth >= 850 ? 3 : constraints.maxWidth >= 560 ? 2 : 1;
-                      final width = (constraints.maxWidth - (columns - 1) * 18) / columns;
-                      return Wrap(
-                        spacing: 18,
-                        runSpacing: 18,
-                        children: _articles.map((article) => SizedBox(
-                          width: width,
-                          child: Card(
-                            elevation: 0,
-                            color: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18), side: const BorderSide(color: Color(0xFFE5E8F0))),
-                            clipBehavior: Clip.antiAlias,
-                            child: Padding(
-                              padding: const EdgeInsets.all(22),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: const Color(0xFFF0EAFE), borderRadius: BorderRadius.circular(20)), child: Text(article['category']!, style: const TextStyle(color: purple, fontSize: 12, fontWeight: FontWeight.bold))),
-                                  const SizedBox(height: 18),
-                                  Text(article['title']!, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: navy, height: 1.3)),
-                                  const SizedBox(height: 10),
-                                  Text(article['summary']!, style: const TextStyle(color: Colors.black54, height: 1.55)),
-                                  const SizedBox(height: 18),
-                                  Row(children: [const Icon(Icons.schedule, size: 15, color: purple), const SizedBox(width: 6), Text(article['read']!, style: const TextStyle(color: Colors.black54, fontSize: 12))]),
-                                ],
-                              ),
-                            ),
-                          ),
-                        )).toList(),
-                      );
-                    }),
-                    const SizedBox(height: 28),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(gradient: const LinearGradient(colors: [navy, blue, purple]), borderRadius: BorderRadius.circular(20)),
-                      child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text('Learning is a journey', style: TextStyle(color: yellow, fontSize: 14, fontWeight: FontWeight.bold)),
-                        SizedBox(height: 8),
-                        Text('Bring these ideas into your next conversation, team session, or personal reflection.', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w600, height: 1.4)),
-                      ]),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          SiteFooter(),
-        ],
-      ),
-    );
-  }
-}
-
-
-// -------------------- ADMIN PRODUCT MANAGEMENT --------------------
-class ProductManagementPage extends StatefulWidget {
-  final VoidCallback onBack;
-  const ProductManagementPage({super.key, required this.onBack});
-
-  @override
-  State<ProductManagementPage> createState() => _ProductManagementPageState();
-}
-
-class _ProductManagementPageState extends State<ProductManagementPage> {
-  final _collection = FirebaseFirestore.instance.collection('products');
-
-  Future<void> _showProductDialog({DocumentSnapshot<Map<String, dynamic>>? doc}) async {
-    final data = doc?.data() ?? <String, dynamic>{};
-    final title = TextEditingController(text: (data['title'] ?? '').toString());
-    final description = TextEditingController(text: (data['description'] ?? '').toString());
-    final price = TextEditingController(text: (data['price'] ?? '').toString());
-    String type = (data['type'] ?? 'Digital').toString();
-    bool available = (data['available'] ?? true) == true;
-    final formKey = GlobalKey<FormState>();
-    await showDialog<void>(context: context, builder: (dialogContext) => StatefulBuilder(
-      builder: (context, setDialogState) => AlertDialog(
-        title: Text(doc == null ? 'Add Product' : 'Edit Product'),
-        content: SizedBox(width: 420, child: SingleChildScrollView(child: Form(
-          key: formKey,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextFormField(controller: title, decoration: const InputDecoration(labelText: 'Product name'), validator: (v) => v == null || v.trim().isEmpty ? 'Enter a product name' : null),
-            const SizedBox(height: 10),
-            TextFormField(controller: description, maxLines: 3, decoration: const InputDecoration(labelText: 'Description'), validator: (v) => v == null || v.trim().isEmpty ? 'Enter a description' : null),
-            const SizedBox(height: 10),
-            TextFormField(controller: price, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Price (MYR)'), validator: (v) { final n = double.tryParse((v ?? '').trim()); return n == null || n < 0 ? 'Enter a valid non-negative price' : null; }),
-            const SizedBox(height: 10),
-            DropdownButtonFormField<String>(value: type, decoration: const InputDecoration(labelText: 'Product type'), items: const [DropdownMenuItem(value: 'Digital', child: Text('Digital')), DropdownMenuItem(value: 'Physical', child: Text('Physical'))], onChanged: (v) { if (v != null) setDialogState(() => type = v); }),
-            SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Available in store'), value: available, onChanged: (v) => setDialogState(() => available = v)),
-          ]),
-        ))),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
-          FilledButton(onPressed: () async {
-            if (!formKey.currentState!.validate()) return;
-            final parsedPrice = double.parse(price.text.trim());
-            final payload = <String, dynamic>{'title': title.text.trim(), 'description': description.text.trim(), 'price': parsedPrice, 'currency': 'MYR', 'type': type, 'available': available, 'updatedAt': FieldValue.serverTimestamp()};
-            try {
-              if (doc == null) { payload['createdAt'] = FieldValue.serverTimestamp(); await _collection.add(payload); }
-              else { await doc.reference.update(payload); }
-              if (!mounted) return;
-              Navigator.pop(dialogContext);
-              ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(content: Text(doc == null ? 'Product added.' : 'Product updated.')));
-            } on FirebaseException catch (e) {
-              if (!mounted) return;
-              ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(content: Text(e.code == 'permission-denied' ? 'Permission denied. Firestore rules must allow authorized admins to manage products.' : 'Could not save product: ${e.message ?? e.code}')));
-            }
-          }, child: const Text('Save Product')),
-        ],
-      ),
-    ));
-    title.dispose(); description.dispose(); price.dispose();
-  }
-
-  Future<void> _deleteProduct(DocumentSnapshot<Map<String, dynamic>> doc) async {
-    final yes = await showDialog<bool>(context: context, builder: (c) => AlertDialog(
-      title: const Text('Delete product?'), content: Text('Delete "${doc.data()?['title'] ?? 'this product'}"?'),
-      actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Delete'))],
-    ));
-    if (yes != true) return;
-    try { await doc.reference.delete(); }
-    on FirebaseException catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.code == 'permission-denied' ? 'Permission denied by Firestore rules.' : 'Could not delete product.'))); }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-    return SingleChildScrollView(child: Column(children: [
-      PageBanner(title: 'Product Management', subtitle: 'Create, edit and publish digital or physical products.'),
-      Padding(padding: const EdgeInsets.all(22), child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 1050), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(children: [Expanded(child: Text('Store products', style: const TextStyle(fontSize: 23, fontWeight: FontWeight.bold, color: navy))), FilledButton.icon(onPressed: () => _showProductDialog(), icon: const Icon(Icons.add), label: const Text('Add Product'))]),
-        const SizedBox(height: 14),
-        if (user == null) const Card(child: Padding(padding: EdgeInsets.all(18), child: Text('Sign in as Super Admin to manage products.')))
-        else StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(stream: _collection.orderBy('createdAt', descending: true).snapshots(), builder: (context, snapshot) {
-          if (snapshot.hasError) return const Card(child: Padding(padding: EdgeInsets.all(18), child: Text('Could not load products. Check Firestore rules for the products collection.')));
-          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: Padding(padding: EdgeInsets.all(25), child: CircularProgressIndicator()));
-          final docs = snapshot.data?.docs ?? [];
-          if (docs.isEmpty) return const Card(child: Padding(padding: EdgeInsets.all(24), child: Text('No products saved yet. Add a product to create its Firestore record. Existing demo store items remain separate until the store is connected to this collection.')));
-          return Column(
-            children: docs.map<Widget>((doc) {
-              final d = doc.data();
-              final p = (d['price'] as num?)?.toDouble() ?? 0;
-              final available = d['available'] == true;
-              return Card(
-                margin: const EdgeInsets.only(bottom: 10),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: const Color(0xFFF0ECFA),
-                    child: Icon(
-                      d['type'] == 'Physical'
-                          ? Icons.inventory_2_outlined
-                          : Icons.menu_book_outlined,
-                      color: purple,
-                    ),
-                  ),
-                  title: Text(
-                    (d['title'] ?? 'Untitled product').toString(),
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: Text(
-                    '${d['type'] ?? 'Digital'} - RM ${p.toStringAsFixed(2)} - ${available ? 'Available' : 'Unpublished'}\n${d['description'] ?? ''}',
-                  ),
-                  isThreeLine: true,
-                  trailing: Wrap(
-                    children: [
-                      IconButton(
-                        tooltip: 'Edit product',
-                        onPressed: () => _showProductDialog(doc: doc),
-                        icon: const Icon(Icons.edit_outlined),
-                      ),
-                      IconButton(
-                        tooltip: 'Delete product',
-                        onPressed: () => _deleteProduct(doc),
-                        icon: const Icon(Icons.delete_outline, color: Colors.red),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
-          );
-        }),
-        const SizedBox(height: 28),
-        const Align(
-          alignment: Alignment.centerLeft,
-          child: Text('Physical order fulfilment', style: TextStyle(fontSize: 23, fontWeight: FontWeight.bold, color: navy)),
-        ),
-        const SizedBox(height: 8),
-        const Align(
-          alignment: Alignment.centerLeft,
-          child: Text('Update shipping progress for paid physical-product orders.', style: TextStyle(color: Colors.black54)),
-        ),
-        const SizedBox(height: 12),
-        StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance.collectionGroup('orders').where('containsPhysical', isEqualTo: true).snapshots(),
-          builder: (context, shippingSnapshot) {
-            if (shippingSnapshot.hasError) {
-              final shippingError = shippingSnapshot.error;
-              return Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Could not load physical orders.',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Copy the diagnostic details below and send them for troubleshooting:',
-                      ),
-                      const SizedBox(height: 8),
-                      SelectableText(shippingError?.toString() ?? 'Unknown Firestore error'),
-                    ],
-                  ),
-                ),
-              );
-            }
-            if (shippingSnapshot.connectionState == ConnectionState.waiting) {
-              return const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator()));
-            }
-            final physicalOrders = (shippingSnapshot.data?.docs ?? []).where((doc) => doc.data()['paymentStatus'] == 'Successful').toList();
-            if (physicalOrders.isEmpty) {
-              return const Card(child: Padding(padding: EdgeInsets.all(18), child: Text('No paid physical-product orders yet.')));
-            }
-            return Column(children: physicalOrders.map<Widget>((doc) {
-              final data = doc.data();
-              final status = (data['shippingStatus'] ?? 'Pending Dispatch').toString();
-              final items = (data['items'] as List<dynamic>? ?? []);
-              final ownerPath = doc.reference.parent.parent?.id ?? 'Unknown customer';
-              return Card(
-                margin: const EdgeInsets.only(bottom: 10),
-                child: ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.local_shipping_outlined)),
-                  title: Text('Order ${doc.id}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text('Customer: $ownerPath\n${items.map((item) => item is Map ? (item['title'] ?? 'Product').toString() : item.toString()).join(', ')}\nShipping: $status\nAddress: ${(data['shippingAddress'] ?? '').toString()}'),
-                  isThreeLine: true,
-                  trailing: PopupMenuButton<String>(
-                    tooltip: 'Update shipping status',
-                    onSelected: (nextStatus) async {
-                      final nextOrderStatus = nextStatus == 'Pending Dispatch' ? 'Processing' : nextStatus;
-                      try {
-                        await doc.reference.update({
-                          'shippingStatus': nextStatus,
-                          'orderStatus': nextOrderStatus,
-                          'updatedAt': FieldValue.serverTimestamp(),
-                        });
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Shipping updated to $nextStatus.')));
-                      } on FirebaseException catch (e) {
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not update shipping: ${e.message ?? e.code}')));
-                      }
-                    },
-                    itemBuilder: (context) => const [
-                      PopupMenuItem(value: 'Pending Dispatch', child: Text('Pending Dispatch')),
-                      PopupMenuItem(value: 'Shipped', child: Text('Shipped')),
-                      PopupMenuItem(value: 'Delivered', child: Text('Delivered')),
-                    ],
-                    child: const Padding(padding: EdgeInsets.all(8), child: Icon(Icons.more_vert)),
-                  ),
-                ),
-              );
-            }).toList());
-          },
-        ),
-        const SizedBox(height: 12), Align(alignment: Alignment.centerLeft, child: OutlinedButton.icon(onPressed: widget.onBack, icon: const Icon(Icons.arrow_back), label: const Text('Back to Dashboard'))),
-      ]))),
-      SiteFooter(),
-    ]));
-  }
-}
-
-class ContactPage extends StatefulWidget {
-  const ContactPage({super.key});
-
-  @override
-  State<ContactPage> createState() => _ContactPageState();
-}
-
-class _ContactPageState extends State<ContactPage> {
-  final formKey = GlobalKey<FormState>();
-  final nameController = TextEditingController();
-  final emailController = TextEditingController();
-  final phoneController = TextEditingController();
-  final organizationController = TextEditingController();
-  final messageController = TextEditingController();
-  String enquiryType = 'Corporate Training';
-  bool isSubmitting = false;
-
-  static const enquiryTypes = [
-    'Individual Coaching',
-    'Corporate Training',
-    'Leadership Development',
-    'Team Development',
-    'Products',
-    'Partnership',
-    'Other',
-  ];
-
-  @override
-  void dispose() {
-    nameController.dispose();
-    emailController.dispose();
-    phoneController.dispose();
-    organizationController.dispose();
-    messageController.dispose();
-    super.dispose();
-  }
-
-  Future<void> submitEnquiry() async {
-    if (!formKey.currentState!.validate()) return;
-    setState(() => isSubmitting = true);
-    try {
-      await FirebaseFirestore.instance.collection('enquiries').add({
-        'name': nameController.text.trim(),
-        'email': emailController.text.trim(),
-        'phone': phoneController.text.trim(),
-        'organization': organizationController.text.trim(),
-        'enquiryType': enquiryType,
-        'message': messageController.text.trim(),
-        'status': 'New',
-        'createdAt': FieldValue.serverTimestamp(),
-        'source': 'Website Contact Form',
-      });
-      if (!mounted) return;
-      formKey.currentState!.reset();
-      nameController.clear();
-      emailController.clear();
-      phoneController.clear();
-      organizationController.clear();
-      messageController.clear();
-      setState(() { enquiryType = 'Corporate Training'; isSubmitting = false; });
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Thank you! Your enquiry has been submitted successfully.')));
-    } on FirebaseException catch (e) {
-      if (!mounted) return;
-      setState(() => isSubmitting = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.code == 'permission-denied'
-          ? 'The enquiry could not be saved. Please publish the enquiries Firestore rule shown in the setup instructions.'
-          : 'Could not submit your enquiry. Please try again.')));
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => isSubmitting = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not submit your enquiry. Please try again.')));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          PageBanner(title: 'Contact Us', subtitle: 'Let’s build a thriving workplace together. Tell us about your learning goals or corporate training needs.'),
-          Padding(
-            padding: const EdgeInsets.all(24),
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 760),
-              padding: const EdgeInsets.all(28),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22), border: Border.all(color: const Color(0xFFE5E8F0))),
-              child: Form(
-                key: formKey,
-                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  const Text('Send us an enquiry', style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold, color: navy)),
-                  const SizedBox(height: 8),
-                  const Text('Complete the form below and our team can follow up with you.', style: TextStyle(color: Colors.black54, height: 1.5)),
-                  const SizedBox(height: 22),
-                  TextFormField(controller: nameController, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Full name *', border: OutlineInputBorder(), prefixIcon: Icon(Icons.person_outline)), validator: (v) => v == null || v.trim().isEmpty ? 'Please enter your name' : null),
-                  const SizedBox(height: 16),
-                  TextFormField(controller: emailController, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Email address *', border: OutlineInputBorder(), prefixIcon: Icon(Icons.email_outlined)), validator: (v) => v == null || !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v.trim()) ? 'Please enter a valid email address' : null),
-                  const SizedBox(height: 16),
-                  TextFormField(controller: phoneController, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Phone number', border: OutlineInputBorder(), prefixIcon: Icon(Icons.phone_outlined))),
-                  const SizedBox(height: 16),
-                  TextFormField(controller: organizationController, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Organization / company', border: OutlineInputBorder(), prefixIcon: Icon(Icons.business_outlined))),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(value: enquiryType, decoration: const InputDecoration(labelText: 'Enquiry type *', border: OutlineInputBorder(), prefixIcon: Icon(Icons.category_outlined)), items: enquiryTypes.map((type) => DropdownMenuItem(value: type, child: Text(type))).toList(), onChanged: (value) { if (value != null) setState(() => enquiryType = value); }),
-                  const SizedBox(height: 16),
-                  TextFormField(controller: messageController, maxLines: 5, decoration: const InputDecoration(labelText: 'Message *', alignLabelWithHint: true, border: OutlineInputBorder(), prefixIcon: Icon(Icons.message_outlined)), validator: (v) => v == null || v.trim().length < 10 ? 'Please enter at least 10 characters' : null),
-                  const SizedBox(height: 20),
-                  FilledButton.icon(style: FilledButton.styleFrom(backgroundColor: navy, padding: const EdgeInsets.all(18)), onPressed: isSubmitting ? null : submitEnquiry, icon: isSubmitting ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.send_rounded), label: Text(isSubmitting ? 'Submitting...' : 'Submit Enquiry')),
-                  const SizedBox(height: 12),
-                  const Text('Your information will be stored securely for the MT Alchemy team to follow up.', textAlign: TextAlign.center, style: TextStyle(color: Colors.black54, fontSize: 12)),
-                ]),
-              ),
-            ),
-          ),
-          SiteFooter(),
-        ],
-      ),
-    );
-  }
-}
-

@@ -41,46 +41,44 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyB6971h3rGAWxmWNZxPj-gDECZt1aSndCU',
-    appId: '1:84812227675:web:59b0eac2c19a480ac7cb7e',
-    messagingSenderId: '84812227675',
-    projectId: 'mt-alchemy',
-    authDomain: 'mt-alchemy.firebaseapp.com',
-    storageBucket: 'mt-alchemy.firebasestorage.app',
+    apiKey: 'AIzaSyDlJ0H75ycgMp3egZIY6JUyN6I0M5RRJcs',
+    appId: '1:870474038175:web:d11e0fce7960d09528dbaa',
+    messagingSenderId: '870474038175',
+    projectId: 'mt-alchemy-client',
+    authDomain: 'mt-alchemy-client.firebaseapp.com',
+    storageBucket: 'mt-alchemy-client.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyCJrZGvnnIuP3ksK7JWwkWZkffPAM41ocY',
-    appId: '1:84812227675:android:6620ac14a0a0ab78c7cb7e',
-    messagingSenderId: '84812227675',
-    projectId: 'mt-alchemy',
-    storageBucket: 'mt-alchemy.firebasestorage.app',
+    apiKey: 'AIzaSyD78cdv9v8tQcZqsc61UprZGdvyNmezPoA',
+    appId: '1:870474038175:android:d1805f0ade71a4ed28dbaa',
+    messagingSenderId: '870474038175',
+    projectId: 'mt-alchemy-client',
+    storageBucket: 'mt-alchemy-client.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyA9HKXBNg6My7B-7My6i_9G12FXTiul7-o',
-    appId: '1:84812227675:ios:7fdcb48d5a793302c7cb7e',
-    messagingSenderId: '84812227675',
-    projectId: 'mt-alchemy',
-    storageBucket: 'mt-alchemy.firebasestorage.app',
+    apiKey: 'AIzaSyBxEV2jCv37HdV3gUjRDHfURiPPDzerA60',
+    appId: '1:870474038175:ios:57dc458507f5984c28dbaa',
+    messagingSenderId: '870474038175',
+    projectId: 'mt-alchemy-client',
+    storageBucket: 'mt-alchemy-client.firebasestorage.app',
     iosBundleId: 'com.example.mtAlchemy',
   );
-
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyA9HKXBNg6My7B-7My6i_9G12FXTiul7-o',
-    appId: '1:84812227675:ios:7fdcb48d5a793302c7cb7e',
-    messagingSenderId: '84812227675',
-    projectId: 'mt-alchemy',
-    storageBucket: 'mt-alchemy.firebasestorage.app',
+    apiKey: 'AIzaSyBxEV2jCv37HdV3gUjRDHfURiPPDzerA60',
+    appId: '1:870474038175:ios:57dc458507f5984c28dbaa',
+    messagingSenderId: '870474038175',
+    projectId: 'mt-alchemy-client',
+    storageBucket: 'mt-alchemy-client.firebasestorage.app',
     iosBundleId: 'com.example.mtAlchemy',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyB6971h3rGAWxmWNZxPj-gDECZt1aSndCU',
-    appId: '1:84812227675:web:9fd7d77410018dd3c7cb7e',
-    messagingSenderId: '84812227675',
-    projectId: 'mt-alchemy',
-    authDomain: 'mt-alchemy.firebaseapp.com',
-    storageBucket: 'mt-alchemy.firebasestorage.app',
+    apiKey: 'AIzaSyDlJ0H75ycgMp3egZIY6JUyN6I0M5RRJcs',
+    appId: '1:870474038175:web:a148f3bd2ec2bc6628dbaa',
+    messagingSenderId: '870474038175',
+    projectId: 'mt-alchemy-client',
+    authDomain: 'mt-alchemy-client.firebaseapp.com',
+    storageBucket: 'mt-alchemy-client.firebasestorage.app',
   );
 }
