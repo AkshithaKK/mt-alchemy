@@ -47,5 +47,10 @@ app.*.map.json
 # Widget Preview related
 .widget_preview/
 
-# Coursework documents (reports, slides, screenshots) are kept out of the repo
-/docs/
+# Firebase CLI deploy cache
+.firebase/
+
+# Coursework reports and slides are kept out of the repo (screenshots stay)
+/docs/*.docx
+/docs/*.pdf
+/docs/*.pptx
