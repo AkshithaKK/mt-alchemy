@@ -1,0 +1,101 @@
+rules_version = '2';
+
+// Role-based access control for the MT Alchemy platform.
+// Roles live on users/{uid}.role: Individual, Employer, Trainer, Super Admin.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function me() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function role() { return signedIn() ? me().role : 'Guest'; }
+    function isAdmin() { return signedIn() && role() == 'Super Admin'; }
+    function isEmployer() { return signedIn() && role() == 'Employer'; }
+    function isTrainer() { return signedIn() && role() == 'Trainer'; }
+    // Firebase Auth stores emails in lower case; the app saves them the same way.
+    function myEmail() { return request.auth.token.email; }
+    function onlyChanges(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
+    }
+
+    // ---------- Users ----------
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      // Self sign-up may never create an administrator.
+      allow create: if signedIn() && request.auth.uid == uid
+                    && request.resource.data.role in ['Individual', 'Employer', 'Trainer'];
+      // Users edit their own profile but not their role or status.
+      allow update: if isAdmin()
+                    || (request.auth.uid == uid && onlyChanges(['name', 'phone', 'country', 'learningAreas']));
+      allow delete: if isAdmin();
+    }
+
+    // ---------- Catalogue ----------
+    match /courses/{courseId} {
+      allow read: if resource.data.status == 'Published' || isAdmin()
+                  || (isTrainer() && resource.data.trainerEmail == myEmail());
+      allow create, delete: if isAdmin();
+      // Trainers may update learning materials of courses assigned to them.
+      allow update: if isAdmin()
+                    || (isTrainer() && resource.data.trainerEmail == myEmail()
+                        && onlyChanges(['description', 'instructor', 'level', 'audience',
+                                        'durationHours', 'passingScore', 'objectives',
+                                        'modules', 'questions']));
+    }
+
+    match /products/{productId} {
+      allow read: if resource.data.status == 'Published' || isAdmin();
+      allow create, delete: if isAdmin();
+      // Checkout reduces stock; nothing else can be changed by customers.
+      allow update: if isAdmin() || (signedIn() && onlyChanges(['stock']));
+    }
+
+    // ---------- Commerce ----------
+    match /orders/{orderId} {
+      allow read: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // ---------- Learning ----------
+    match /enrolments/{enrolmentId} {
+      // Ids are "<uid>_<courseId>", so a learner can check their own (even
+      // before it exists) without being able to read anyone else's.
+      allow get: if signedIn() && enrolmentId.matches(request.auth.uid + '_.*');
+      allow read: if signedIn() && (resource.data.userId == request.auth.uid
+                  || isAdmin() || isTrainer() || isEmployer());
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid
+                    && enrolmentId == request.auth.uid + '_' + request.resource.data.courseId;
+      allow update: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid
+                    && onlyChanges(['completed', 'quizScore', 'passed', 'certificateId', 'completedAt']));
+      allow delete: if isAdmin();
+    }
+
+    // ---------- Corporate ----------
+    match /organizations/{orgId} {
+      allow read: if signedIn() && (request.auth.uid == orgId || isAdmin());
+      allow write: if signedIn() && (request.auth.uid == orgId || isAdmin());
+    }
+
+    match /employees/{employeeId} {
+      allow read, delete: if signedIn() && (resource.data.orgId == request.auth.uid || isAdmin());
+      allow create: if isEmployer() && request.resource.data.orgId == request.auth.uid;
+      allow update: if isAdmin();
+    }
+
+    match /assignments/{assignmentId} {
+      allow read: if signedIn() && (resource.data.orgId == request.auth.uid
+                  || myEmail() in resource.data.employeeEmails || isAdmin());
+      allow create: if isEmployer() && request.resource.data.orgId == request.auth.uid;
+      allow update, delete: if isAdmin() || (signedIn() && resource.data.orgId == request.auth.uid);
+    }
+
+    // ---------- Enquiries (Journey E) ----------
+    match /enquiries/{enquiryId} {
+      // Anyone, including guests, can submit; only admins can read or manage.
+      allow create: if request.resource.data.status == 'New'
+                    && request.resource.data.message is string
+                    && request.resource.data.message.size() >= 10;
+      allow read, update, delete: if isAdmin();
+    }
+  }
+}

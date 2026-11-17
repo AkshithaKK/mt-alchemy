@@ -2,7 +2,19 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:provider/provider.dart';
+
 import 'firebase_options.dart';
+import 'models/course.dart';
+import 'models/learning.dart';
+import 'pages/dashboard/dashboards.dart';
+import 'pages/learning/course_pages.dart';
+import 'pages/store/store_pages.dart';
+import 'services/firestore_service.dart';
+import 'state/app_state.dart';
+import 'state/cart.dart';
+import 'theme.dart';
+import 'widgets/ui.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -11,16 +23,16 @@ Future<void> main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  runApp(const MTAlchemyApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AppState()),
+        ChangeNotifierProvider(create: (_) => Cart()),
+      ],
+      child: const MTAlchemyApp(),
+    ),
+  );
 }
-
-
-const Color navy = Color(0xFF0B1426);
-const Color blue = Color(0xFF172B4D);
-const Color yellow = Color(0xFFD8B56D);
-// Legacy accent name retained so existing widgets keep working; now uses the brand gold.
-const Color purple = Color(0xFFD8B56D);
-const Color pageBg = Color(0xFFF4F2ED);
 
 class MTAlchemyApp extends StatelessWidget {
   const MTAlchemyApp({super.key});
@@ -30,162 +42,11 @@ class MTAlchemyApp extends StatelessWidget {
     return MaterialApp(
       title: 'MT Alchemy',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        scaffoldBackgroundColor: pageBg,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: yellow,
-          brightness: Brightness.light,
-          primary: navy,
-          secondary: yellow,
-          surface: Colors.white,
-        ),
-        fontFamily: 'Arial',
-        cardTheme: CardThemeData(
-          color: Colors.white,
-          elevation: 2,
-          shadowColor: navy.withValues(alpha: 0.08),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-            side: const BorderSide(color: Color(0xFFE8E2D5)),
-          ),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: const Color(0xFFFAF9F6),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFFD8D3C8)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0xFFD8D3C8)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: navy, width: 1.5),
-          ),
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: navy,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          surfaceTintColor: Colors.transparent,
-          titleTextStyle: const TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.4,
-          ),
-        ),
-        filledButtonTheme: FilledButtonThemeData(
-          style: ButtonStyle(
-            animationDuration: const Duration(milliseconds: 220),
-            shape: WidgetStatePropertyAll(
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
-        ),
-        outlinedButtonTheme: OutlinedButtonThemeData(
-          style: ButtonStyle(
-            animationDuration: const Duration(milliseconds: 220),
-            shape: WidgetStatePropertyAll(
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
-        ),
-      ),
+      theme: buildAppTheme(),
       home: const MainWebsite(),
     );
   }
 }
-
-class Course {
-  final String title;
-  final String category;
-  final String description;
-  final IconData icon;
-  final Color color;
-
-  const Course(
-      this.title,
-      this.category,
-      this.description,
-      this.icon,
-      this.color,
-      );
-}
-
-class Product {
-  final String title;
-  final String description;
-  final String price;
-  final IconData icon;
-  final Color color;
-
-  const Product(
-      this.title,
-      this.description,
-      this.price,
-      this.icon,
-      this.color,
-      );
-}
-
-const List<Course> courses = [
-  Course(
-    'Leadership Essentials',
-    'Leadership',
-    'Build confidence, communication and leadership skills.',
-    Icons.groups_rounded,
-    navy,
-  ),
-  Course(
-    'Digital Transformation',
-    'Digital Skills',
-    'Understand modern digital tools and business transformation.',
-    Icons.devices_rounded,
-    purple,
-  ),
-  Course(
-    'Workplace Communication',
-    'Professional Skills',
-    'Improve teamwork, communication and collaboration.',
-    Icons.forum_rounded,
-    blue,
-  ),
-  Course(
-    'Project Management',
-    'Business',
-    'Learn planning, delivery and project coordination.',
-    Icons.task_alt_rounded,
-    Color(0xFF168A79),
-  ),
-];
-
-const List<Product> products = [
-  Product(
-    'Digital Learning Guide',
-    'A practical guide for professional development.',
-    'RM 29.00',
-    Icons.menu_book_rounded,
-    purple,
-  ),
-  Product(
-    'Leadership Workbook',
-    'Exercises and activities for developing leaders.',
-    'RM 39.00',
-    Icons.auto_stories_rounded,
-    navy,
-  ),
-  Product(
-    'Corporate Training Pack',
-    'Resources for team learning and development.',
-    'RM 59.00',
-    Icons.inventory_2_rounded,
-    blue,
-  ),
-];
 
 class MainWebsite extends StatefulWidget {
   const MainWebsite({super.key});
@@ -196,71 +57,67 @@ class MainWebsite extends StatefulWidget {
 
 class _MainWebsiteState extends State<MainWebsite> {
   String currentPage = 'Home';
-  String signedInRole = 'Individual';
-  final List<Product> cart = [];
+
+  /// Top-level menu, in the order the brief asks for.
+  static const menu = ['Home', 'About', 'Services', 'Upskilling', 'Store', 'Contact'];
+
+  @override
+  void initState() {
+    super.initState();
+    AppNav.register(navigate);
+  }
 
   void navigate(String page) {
     setState(() => currentPage = page);
   }
 
+  Future<void> signOut() async {
+    await FirebaseAuth.instance.signOut();
+    if (!mounted) return;
+    context.read<Cart>().clear();
+    navigate('Home');
+  }
+
   @override
   Widget build(BuildContext context) {
+    final app = context.watch<AppState>();
+    final cart = context.watch<Cart>();
     final pages = <String, Widget>{
       'Home': HomePage(
         onNavigate: navigate,
       ),
-      'About Us': AboutPage(),
+      'About': AboutPage(),
       'Services': ServicesPage(
         onNavigate: navigate,
       ),
-      'Learning Hub': LearningPage(
+      'Upskilling': LearningPage(
         onNavigate: navigate,
       ),
-      'Digital Store': StorePage(
-        cart: cart,
-        onAdd: (product) {
-          setState(() => cart.add(product));
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${product.title} added to your cart'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        },
-        onCart: () => navigate('Cart'),
-      ),
-      'Cart': CartPage(
-        cart: cart,
-        onRemove: (index) {
-          setState(() => cart.removeAt(index));
-        },
-        onShop: () => navigate('Digital Store'),
-        onCheckout: () => navigate('Login'),
-      ),
+      'Store': StorePage(onCart: () => navigate('Cart')),
+      'Cart': CartPage(onShop: () => navigate('Store')),
       'Login': LoginPage(
         onRegister: () => navigate('Register'),
-        onLoginSuccess: (role) {
-          setState(() {
-            signedInRole = role;
-            currentPage = 'Dashboard';
-          });
+        onLoginSuccess: (_) async {
+          await app.refreshProfile();
+          navigate('Dashboard');
         },
       ),
       'Register': RegisterPage(
         onLogin: () => navigate('Login'),
       ),
-      'Dashboard': DashboardPage(
-        role: signedInRole,
-        onNavigate: navigate,
-        onSignOut: () async {
-          await FirebaseAuth.instance.signOut();
-          if (!mounted) return;
-          setState(() {
-            signedInRole = 'Individual';
-            currentPage = 'Home';
-          });
-        },
-      ),
+      'Dashboard': app.isLoggedIn
+          ? DashboardPage(
+              role: app.role,
+              onNavigate: navigate,
+              onSignOut: signOut,
+            )
+          : LoginPage(
+              onRegister: () => navigate('Register'),
+              onLoginSuccess: (_) async {
+                await app.refreshProfile();
+                navigate('Dashboard');
+              },
+            ),
       'Contact': const ContactPage(),
     };
 
@@ -303,13 +160,8 @@ class _MainWebsiteState extends State<MainWebsite> {
         actions: [
           if (MediaQuery.sizeOf(context).width > 850)
             ...[
-              'Home',
-              'About Us',
-              'Services',
-              'Learning Hub',
-              'Digital Store',
-              if (FirebaseAuth.instance.currentUser != null) 'Dashboard',
-              'Contact',
+              ...menu,
+              if (app.isLoggedIn) 'Dashboard',
             ].map(
                   (page) => TextButton(
                 onPressed: () => navigate(page),
@@ -328,8 +180,8 @@ class _MainWebsiteState extends State<MainWebsite> {
             tooltip: 'Shopping cart',
             onPressed: () => navigate('Cart'),
             icon: Badge(
-              label: Text('${cart.length}'),
-              isLabelVisible: cart.isNotEmpty,
+              label: Text('${cart.count}'),
+              isLabelVisible: !cart.isEmpty,
               child: const Icon(Icons.shopping_bag_outlined, color: Colors.white),
             ),
           ),
@@ -340,8 +192,8 @@ class _MainWebsiteState extends State<MainWebsite> {
                 backgroundColor: navy,
                 foregroundColor: Colors.white,
               ),
-              onPressed: () => navigate('Login'),
-              child: const Text('Sign in'),
+              onPressed: () => navigate(app.isLoggedIn ? 'Dashboard' : 'Login'),
+              child: Text(app.isLoggedIn ? 'My Dashboard' : 'Sign in'),
             ),
           ),
         ],
@@ -364,15 +216,9 @@ class _MainWebsiteState extends State<MainWebsite> {
               ),
               const Divider(),
               for (final page in [
-                'Home',
-                'About Us',
-                'Services',
-                'Learning Hub',
-                'Digital Store',
+                ...menu,
                 'Cart',
-                if (FirebaseAuth.instance.currentUser != null) 'Dashboard',
-                'Contact',
-                'Login',
+                if (app.isLoggedIn) 'Dashboard' else 'Login',
               ])
                 ListTile(
                   leading: Icon(_pageIcon(page)),
@@ -418,13 +264,13 @@ class _MainWebsiteState extends State<MainWebsite> {
     switch (page) {
       case 'Home':
         return Icons.home_outlined;
-      case 'About Us':
+      case 'About':
         return Icons.info_outline;
       case 'Services':
         return Icons.business_center_outlined;
-      case 'Learning Hub':
+      case 'Upskilling':
         return Icons.school_outlined;
-      case 'Digital Store':
+      case 'Store':
         return Icons.storefront_outlined;
       case 'Cart':
         return Icons.shopping_cart_outlined;
@@ -586,7 +432,7 @@ class HomePage extends StatelessWidget {
                                 vertical: 18,
                               ),
                             ),
-                            onPressed: () => onNavigate('Learning Hub'),
+                            onPressed: () => onNavigate('Upskilling'),
                             child: const Text('Explore Learning'),
                           ),
                           OutlinedButton(
@@ -668,7 +514,7 @@ class HomePage extends StatelessWidget {
                   description:
                   'Explore courses and develop practical professional skills.',
                   color: navy,
-                  onTap: () => onNavigate('Learning Hub'),
+                  onTap: () => onNavigate('Upskilling'),
                 ),
                 FeatureCard(
                   icon: Icons.shopping_bag_rounded,
@@ -676,7 +522,7 @@ class HomePage extends StatelessWidget {
                   description:
                   'Discover digital learning materials and useful resources.',
                   color: purple,
-                  onTap: () => onNavigate('Digital Store'),
+                  onTap: () => onNavigate('Store'),
                 ),
                 FeatureCard(
                   icon: Icons.apartment_rounded,
@@ -698,15 +544,10 @@ class HomePage extends StatelessWidget {
           const SizedBox(height: 24),
           Padding(
             padding: EdgeInsets.symmetric(horizontal: horizontal),
-            child: Wrap(
-              spacing: 20,
-              runSpacing: 20,
-              children: courses.take(3).map((course) {
-                return CourseCard(
-                  course: course,
-                  onTap: () => onNavigate('Learning Hub'),
-                );
-              }).toList(),
+            child: CourseCatalogue(
+              limit: 3,
+              cardBuilder: (course, onTap) =>
+                  CourseCard(course: course, onTap: onTap),
             ),
           ),
           const SizedBox(height: 45),
@@ -943,48 +784,17 @@ class LearningPage extends StatelessWidget {
       child: Column(
         children: [
           const PageBanner(
-            title: 'Learning Hub',
+            title: 'Learning Hub: Learn. Apply. Grow.',
             subtitle:
-            'Explore courses designed to support personal and professional growth.',
+            'Self-paced courses on emotional intelligence, leadership and well-being, '
+            'with quizzes and certificates.',
           ),
           const SizedBox(height: 30),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Wrap(
-              spacing: 20,
-              runSpacing: 20,
-              children: courses.map((course) {
-                return CourseCard(
-                  course: course,
-                  onTap: () {
-                    showDialog<void>(
-                      context: context,
-                      builder: (dialogContext) => AlertDialog(
-                        icon: Icon(course.icon, color: course.color, size: 40),
-                        title: Text(course.title),
-                        content: Text(
-                          '${course.description}\n\n'
-                              'This is a sample course. Course enrolment and lesson '
-                              'access will be connected to the backend later.',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(dialogContext),
-                            child: const Text('Close'),
-                          ),
-                          FilledButton(
-                            onPressed: () {
-                              Navigator.pop(dialogContext);
-                              onNavigate('Login');
-                            },
-                            child: const Text('Sign in to continue'),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              }).toList(),
+            child: CourseCatalogue(
+              cardBuilder: (course, onTap) =>
+                  CourseCard(course: course, onTap: onTap),
             ),
           ),
           const SizedBox(height: 35),
@@ -995,107 +805,34 @@ class LearningPage extends StatelessWidget {
   }
 }
 
-// -------------------- DIGITAL STORE --------------------
+// -------------------- STORE --------------------
 
 class StorePage extends StatelessWidget {
-  final List<Product> cart;
-  final ValueChanged<Product> onAdd;
   final VoidCallback onCart;
 
-  const StorePage({
-    super.key,
-    required this.cart,
-    required this.onAdd,
-    required this.onCart,
-  });
+  const StorePage({super.key, required this.onCart});
 
   @override
   Widget build(BuildContext context) {
+    final cart = context.watch<Cart>();
     return SingleChildScrollView(
       child: Column(
         children: [
           const PageBanner(
-            title: 'Digital Store',
+            title: 'MT Alchemy Store',
             subtitle:
-            'Discover learning guides, workbooks and digital resources.',
+            'Digital downloads and physical learning tools for individuals and teams.',
           ),
           const SizedBox(height: 30),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Wrap(
-              spacing: 20,
-              runSpacing: 20,
-              children: products.map((product) {
-                return Container(
-                  width: 280,
-                  padding: const EdgeInsets.all(22),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFFE8E2D5)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        height: 130,
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: product.color.withValues(alpha: 0.10),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Icon(
-                          product.icon,
-                          size: 55,
-                          color: product.color,
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      Text(
-                        product.title,
-                        style: const TextStyle(
-                          color: navy,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        product.description,
-                        style: const TextStyle(height: 1.6, color: Colors.black54),
-                      ),
-                      const SizedBox(height: 14),
-                      Text(
-                        product.price,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: purple,
-                          fontSize: 19,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: navy,
-                          ),
-                          onPressed: () => onAdd(product),
-                          icon: const Icon(Icons.add_shopping_cart),
-                          label: const Text('Add to cart'),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24),
+            child: StoreCatalogue(),
           ),
           const SizedBox(height: 25),
           OutlinedButton.icon(
             onPressed: onCart,
             icon: const Icon(Icons.shopping_cart_outlined),
-            label: Text('View Cart (${cart.length})'),
+            label: Text('View Cart (${cart.count})'),
           ),
           const SizedBox(height: 45),
           const SiteFooter(),
@@ -1108,18 +845,9 @@ class StorePage extends StatelessWidget {
 // -------------------- CART --------------------
 
 class CartPage extends StatelessWidget {
-  final List<Product> cart;
-  final ValueChanged<int> onRemove;
   final VoidCallback onShop;
-  final VoidCallback onCheckout;
 
-  const CartPage({
-    super.key,
-    required this.cart,
-    required this.onRemove,
-    required this.onShop,
-    required this.onCheckout,
-  });
+  const CartPage({super.key, required this.onShop});
 
   @override
   Widget build(BuildContext context) {
@@ -1128,71 +856,14 @@ class CartPage extends StatelessWidget {
         children: [
           const PageBanner(
             title: 'Your Cart',
-            subtitle: 'Review your selected digital learning resources.',
+            subtitle: 'Review your items, then check out securely.',
           ),
           const SizedBox(height: 30),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 850),
             child: Padding(
               padding: const EdgeInsets.all(20),
-              child: cart.isEmpty
-                  ? Column(
-                children: [
-                  const Icon(
-                    Icons.shopping_bag_outlined,
-                    size: 75,
-                    color: purple,
-                  ),
-                  const SizedBox(height: 18),
-                  const Text(
-                    'Your cart is empty',
-                    style: TextStyle(
-                      color: navy,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 24,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  const Text('Explore the store to find learning resources.'),
-                  const SizedBox(height: 20),
-                  FilledButton(
-                    onPressed: onShop,
-                    child: const Text('Browse Store'),
-                  ),
-                ],
-              )
-                  : Column(
-                children: [
-                  for (int i = 0; i < cart.length; i++)
-                    Card(
-                      color: Colors.white,
-                      child: ListTile(
-                        leading: Icon(
-                          cart[i].icon,
-                          color: cart[i].color,
-                          size: 32,
-                        ),
-                        title: Text(cart[i].title),
-                        subtitle: Text(cart[i].price),
-                        trailing: IconButton(
-                          tooltip: 'Remove item',
-                          icon: const Icon(Icons.delete_outline),
-                          onPressed: () => onRemove(i),
-                        ),
-                      ),
-                    ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'Checkout is a prototype screen. No real payment will be taken.',
-                    style: TextStyle(color: Colors.black54),
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: onCheckout,
-                    child: const Text('Continue to Sign In'),
-                  ),
-                ],
-              ),
+              child: CartView(onShop: onShop),
             ),
           ),
           const SizedBox(height: 45),
@@ -1540,33 +1211,6 @@ class DashboardPage extends StatelessWidget {
         ? 'Access learning resources and training tools.'
         : 'Continue your learning and discover new resources.';
 
-    final items = <({IconData icon, String title, String description, String page})>[
-      (
-      icon: Icons.school_outlined,
-      title: 'Learning Hub',
-      description: 'Explore courses and professional learning resources.',
-      page: 'Learning Hub',
-      ),
-      (
-      icon: Icons.storefront_outlined,
-      title: 'Digital Store',
-      description: 'Browse digital guides, workbooks and resources.',
-      page: 'Digital Store',
-      ),
-      (
-      icon: Icons.business_center_outlined,
-      title: 'Services',
-      description: 'Discover training programmes and business services.',
-      page: 'Services',
-      ),
-      (
-      icon: Icons.mail_outline,
-      title: 'Contact Support',
-      description: 'Send an enquiry to the MT Alchemy team.',
-      page: 'Contact',
-      ),
-    ];
-
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Center(
@@ -1665,141 +1309,7 @@ class DashboardPage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 30),
-              const Text(
-                'Quick access',
-                style: TextStyle(
-                  color: navy,
-                  fontSize: 25,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Choose a section to continue.',
-                style: TextStyle(color: Colors.black54),
-              ),
-              const SizedBox(height: 20),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final columns = constraints.maxWidth >= 850
-                      ? 4
-                      : constraints.maxWidth >= 560
-                      ? 2
-                      : 1;
-                  final width =
-                      (constraints.maxWidth - (columns - 1) * 16) / columns;
-                  return Wrap(
-                    spacing: 16,
-                    runSpacing: 16,
-                    children: items.map((item) {
-                      return SizedBox(
-                        width: width,
-                        child: Card(
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(18),
-                            onTap: () => onNavigate(item.page),
-                            child: Padding(
-                              padding: const EdgeInsets.all(20),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: yellow.withValues(alpha: 0.16),
-                                      borderRadius: BorderRadius.circular(13),
-                                    ),
-                                    child: Icon(
-                                      item.icon,
-                                      color: navy,
-                                      size: 27,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 18),
-                                  Text(
-                                    item.title,
-                                    style: const TextStyle(
-                                      color: navy,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 17,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    item.description,
-                                    style: const TextStyle(
-                                      color: Colors.black54,
-                                      height: 1.5,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 14),
-                                  const Row(
-                                    children: [
-                                      Text(
-                                        'Open section',
-                                        style: TextStyle(
-                                          color: navy,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      SizedBox(width: 6),
-                                      Icon(
-                                        Icons.arrow_forward_rounded,
-                                        color: yellow,
-                                        size: 18,
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  );
-                },
-              ),
-              if (isAdmin) ...[
-                const SizedBox(height: 28),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(22),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.admin_panel_settings_outlined,
-                            color: navy, size: 32),
-                        const SizedBox(width: 14),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Administrator access',
-                                style: TextStyle(
-                                  color: navy,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 17,
-                                ),
-                              ),
-                              SizedBox(height: 5),
-                              Text(
-                                'Your account is recognised as Super Admin. '
-                                    'Administrative data-management tools must be '
-                                    'connected to secured backend operations before use.',
-                                style: TextStyle(
-                                  color: Colors.black54,
-                                  height: 1.5,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+              RoleDashboard(role: role, onNavigate: onNavigate),
               const SizedBox(height: 35),
               const SiteFooter(),
             ],
@@ -1823,14 +1333,52 @@ class _ContactPageState extends State<ContactPage> {
   final formKey = GlobalKey<FormState>();
   final nameController = TextEditingController();
   final emailController = TextEditingController();
+  final phoneController = TextEditingController();
+  final organizationController = TextEditingController();
   final messageController = TextEditingController();
+  String enquiryType = enquiryTypes.first;
+  bool sending = false;
 
   @override
   void dispose() {
     nameController.dispose();
     emailController.dispose();
+    phoneController.dispose();
+    organizationController.dispose();
     messageController.dispose();
     super.dispose();
+  }
+
+  Future<void> submit() async {
+    if (!formKey.currentState!.validate()) return;
+    setState(() => sending = true);
+    try {
+      await Db.addEnquiry(Enquiry(
+        name: nameController.text.trim(),
+        email: emailController.text.trim(),
+        phone: phoneController.text.trim(),
+        organization: organizationController.text.trim(),
+        type: enquiryType,
+        message: messageController.text.trim(),
+      ));
+      if (!mounted) return;
+      formKey.currentState!.reset();
+      for (final c in [
+        nameController,
+        emailController,
+        phoneController,
+        organizationController,
+        messageController,
+      ]) {
+        c.clear();
+      }
+      showSnack(context,
+          'Thank you! Your enquiry was received. Our team will contact you within 2 working days.');
+    } catch (e) {
+      if (mounted) showSnack(context, 'Sorry, the enquiry could not be sent: $e');
+    } finally {
+      if (mounted) setState(() => sending = false);
+    }
   }
 
   @override
@@ -1839,9 +1387,9 @@ class _ContactPageState extends State<ContactPage> {
       child: Column(
         children: [
           const PageBanner(
-            title: 'Contact Us',
+            title: "Let's build a thriving workplace together.",
             subtitle:
-            'Tell us about your learning goals or corporate training needs.',
+            'Tell us about your coaching, training or partnership needs and we will get back to you.',
           ),
           Padding(
             padding: const EdgeInsets.all(24),
@@ -1871,7 +1419,6 @@ class _ContactPageState extends State<ContactPage> {
                       controller: nameController,
                       decoration: const InputDecoration(
                         labelText: 'Full name',
-                        border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.person_outline),
                       ),
                       validator: (value) =>
@@ -1885,7 +1432,6 @@ class _ContactPageState extends State<ContactPage> {
                       keyboardType: TextInputType.emailAddress,
                       decoration: const InputDecoration(
                         labelText: 'Email address',
-                        border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.email_outlined),
                       ),
                       validator: (value) {
@@ -1899,12 +1445,41 @@ class _ContactPageState extends State<ContactPage> {
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
+                      controller: phoneController,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(
+                        labelText: 'Phone (optional)',
+                        prefixIcon: Icon(Icons.phone_outlined),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: organizationController,
+                      decoration: const InputDecoration(
+                        labelText: 'Organization (optional)',
+                        prefixIcon: Icon(Icons.business_outlined),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      initialValue: enquiryType,
+                      decoration: const InputDecoration(
+                        labelText: 'Enquiry type',
+                        prefixIcon: Icon(Icons.category_outlined),
+                      ),
+                      items: [
+                        for (final t in enquiryTypes)
+                          DropdownMenuItem(value: t, child: Text(t)),
+                      ],
+                      onChanged: (v) => setState(() => enquiryType = v ?? enquiryType),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
                       controller: messageController,
                       maxLines: 5,
                       decoration: const InputDecoration(
                         labelText: 'How can we help?',
                         alignLabelWithHint: true,
-                        border: OutlineInputBorder(),
                       ),
                       validator: (value) =>
                       value == null || value.trim().length < 10
@@ -1917,24 +1492,8 @@ class _ContactPageState extends State<ContactPage> {
                         backgroundColor: navy,
                         padding: const EdgeInsets.all(18),
                       ),
-                      onPressed: () {
-                        if (formKey.currentState!.validate()) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Form validated. Saving enquiries requires a backend.',
-                              ),
-                            ),
-                          );
-                        }
-                      },
-                      child: const Text('Submit Enquiry'),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'This prototype does not send or save your enquiry yet.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.black54, fontSize: 12),
+                      onPressed: sending ? null : submit,
+                      child: Text(sending ? 'Sending…' : 'Submit Enquiry'),
                     ),
                   ],
                 ),
@@ -2354,6 +1913,13 @@ class _RegisterPageState extends State<RegisterPage> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
   final confirmPasswordController = TextEditingController();
+  final phoneController = TextEditingController();
+  final orgNameController = TextEditingController();
+  final regNoController = TextEditingController();
+  final industryController = TextEditingController();
+  final employeeCountController = TextEditingController();
+  String country = 'Malaysia';
+  final Set<String> learningAreas = {};
 
   String selectedRole = 'Individual';
   bool hidePassword = true;
@@ -2365,6 +1931,11 @@ class _RegisterPageState extends State<RegisterPage> {
     emailController.dispose();
     passwordController.dispose();
     confirmPasswordController.dispose();
+    phoneController.dispose();
+    orgNameController.dispose();
+    regNoController.dispose();
+    industryController.dispose();
+    employeeCountController.dispose();
     super.dispose();
   }
 
@@ -2407,8 +1978,25 @@ class _RegisterPageState extends State<RegisterPage> {
           'email': emailController.text.trim(),
           'role': selectedRole,
           'status': 'Active',
+          'phone': phoneController.text.trim(),
+          'country': country,
+          'learningAreas': learningAreas.toList(),
           'createdAt': FieldValue.serverTimestamp(),
         });
+
+        // Employer accounts also create their organisation profile.
+        if (selectedRole == 'Employer') {
+          await Db.saveOrganization(Organization(
+            id: user.uid,
+            name: orgNameController.text.trim(),
+            registrationNo: regNoController.text.trim(),
+            industry: industryController.text.trim(),
+            employeeCount: int.tryParse(employeeCountController.text.trim()) ?? 0,
+            contactPerson: nameController.text.trim(),
+            email: emailController.text.trim(),
+            phone: phoneController.text.trim(),
+          ));
+        }
 
         await user.updateDisplayName(nameController.text.trim());
       }
@@ -2585,6 +2173,83 @@ class _RegisterPageState extends State<RegisterPage> {
                     }
                   },
                 ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: phoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'Phone',
+                    prefixIcon: Icon(Icons.phone_outlined),
+                  ),
+                  validator: (v) => RegExp(r'^[0-9+\-\s]{8,15}$').hasMatch((v ?? '').trim())
+                      ? null
+                      : 'Enter a valid phone number',
+                ),
+                if (selectedRole == 'Individual') ...[
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    initialValue: country,
+                    decoration: const InputDecoration(labelText: 'Country'),
+                    items: [
+                      for (final c in const ['Malaysia', 'Singapore', 'Indonesia', 'Thailand', 'Other'])
+                        DropdownMenuItem(value: c, child: Text(c)),
+                    ],
+                    onChanged: (v) => setState(() => country = v ?? country),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('Preferred learning areas'),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final area in courseCategories.take(6))
+                        FilterChip(
+                          label: Text(area),
+                          selected: learningAreas.contains(area),
+                          onSelected: (on) => setState(() =>
+                              on ? learningAreas.add(area) : learningAreas.remove(area)),
+                        ),
+                    ],
+                  ),
+                ],
+                if (selectedRole == 'Employer') ...[
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: orgNameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Organization name',
+                      prefixIcon: Icon(Icons.business_outlined),
+                    ),
+                    validator: (v) => (v ?? '').trim().isEmpty ? 'Required for employers' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: regNoController,
+                    decoration: const InputDecoration(labelText: 'Company registration no.'),
+                    validator: (v) => (v ?? '').trim().isEmpty ? 'Required for employers' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  Row(children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: industryController,
+                        decoration: const InputDecoration(labelText: 'Industry'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextFormField(
+                        controller: employeeCountController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'No. of employees'),
+                        validator: (v) => (v ?? '').isEmpty || int.tryParse(v!) != null
+                            ? null
+                            : 'Numbers only',
+                      ),
+                    ),
+                  ]),
+                ],
                 const SizedBox(height: 16),
                 const Text('Email address'),
                 const SizedBox(height: 8),

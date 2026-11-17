@@ -46,3 +46,6 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Coursework documents (reports, slides, screenshots) are kept out of the repo
+/docs/
