@@ -2,7 +2,24 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../theme.dart';
-
+String productImage(String title) {
+  switch (title) {
+    case 'Emotional Clarity Workbook':
+      return 'assets/images/photo13.jpg';
+    case 'Leadership Reflection Templates':
+      return 'assets/images/photo14.jpg';
+    case 'Mindful Week Digital Journal':
+      return 'assets/images/photo15.jpg';
+    case 'Printed EQ Workbook':
+      return 'assets/images/photo16.jpg';
+    case 'Team Conversation Cards':
+      return 'assets/images/photo17.jpg';
+    case 'Workshop Learning Kit':
+      return 'assets/images/photo18.jpg';
+    default:
+      return 'assets/images/resources.jpg';
+  }
+}
 class Product {
   final String id;
   final String title;

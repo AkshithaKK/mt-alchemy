@@ -83,7 +83,15 @@ class ProductCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                IconArt(icon: product.icon, color: product.color),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.asset(
+                    productImage(product.title),
+                    width: double.infinity,
+                    height: 140,
+                    fit: BoxFit.cover,
+                  ),
+                ),
                 const SizedBox(height: 14),
                 Row(
                   children: [
@@ -255,13 +263,31 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 ? Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(child: IconArt(icon: p.icon, color: p.color, height: 320)),
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Image.asset(
+                            productImage(p.title),
+                            width: double.infinity,
+                            height: 320,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
                       const SizedBox(width: 30),
                       Expanded(child: info),
                     ],
                   )
                 : Column(children: [
-                    IconArt(icon: p.icon, color: p.color, height: 200),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Image.asset(
+                  productImage(p.title),
+                  width: double.infinity,
+                  height: 200,
+                  fit: BoxFit.cover,
+                ),
+              ),
                     const SizedBox(height: 20),
                     info,
                   ]),

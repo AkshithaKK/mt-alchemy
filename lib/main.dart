@@ -1,2346 +1,2971 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:provider/provider.dart';
+  import 'package:cloud_firestore/cloud_firestore.dart';
+  import 'package:firebase_auth/firebase_auth.dart';
+  import 'package:flutter/material.dart';
+  import 'package:firebase_core/firebase_core.dart';
+  import 'package:provider/provider.dart';
 
-import 'firebase_options.dart';
-import 'models/course.dart';
-import 'models/learning.dart';
-import 'pages/dashboard/dashboards.dart';
-import 'pages/learning/course_pages.dart';
-import 'pages/store/store_pages.dart';
-import 'services/firestore_service.dart';
-import 'state/app_state.dart';
-import 'state/cart.dart';
-import 'theme.dart';
-import 'widgets/ui.dart';
+  import 'firebase_options.dart';
+  import 'models/course.dart';
+  import 'models/learning.dart';
+  import 'pages/dashboard/dashboards.dart';
+  import 'pages/learning/course_pages.dart';
+  import 'pages/store/store_pages.dart';
+  import 'services/firestore_service.dart';
+  import 'state/app_state.dart';
+  import 'state/cart.dart';
+  import 'theme.dart';
+  import 'widgets/ui.dart';
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  Future<void> main() async {
+    WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
 
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => AppState()),
-        ChangeNotifierProvider(create: (_) => Cart()),
-      ],
-      child: const MTAlchemyApp(),
-    ),
-  );
-}
-
-class MTAlchemyApp extends StatelessWidget {
-  const MTAlchemyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'MT Alchemy',
-      debugShowCheckedModeBanner: false,
-      theme: buildAppTheme(),
-      home: const MainWebsite(),
+    runApp(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => AppState()),
+          ChangeNotifierProvider(create: (_) => Cart()),
+        ],
+        child: const MTAlchemyApp(),
+      ),
     );
   }
-}
 
-class MainWebsite extends StatefulWidget {
-  const MainWebsite({super.key});
+  class MTAlchemyApp extends StatelessWidget {
+    const MTAlchemyApp({super.key});
 
-  @override
-  State<MainWebsite> createState() => _MainWebsiteState();
-}
-
-class _MainWebsiteState extends State<MainWebsite> {
-  String currentPage = 'Home';
-
-  /// Top-level menu, in the order the brief asks for.
-  static const menu = ['Home', 'About', 'Services', 'Upskilling', 'Store', 'Contact'];
-
-  @override
-  void initState() {
-    super.initState();
-    AppNav.register(navigate);
+    @override
+    Widget build(BuildContext context) {
+      return MaterialApp(
+        title: 'MT Alchemy',
+        debugShowCheckedModeBanner: false,
+        theme: buildAppTheme(),
+        home: const MainWebsite(),
+      );
+    }
   }
 
-  void navigate(String page) {
-    setState(() => currentPage = page);
+  class MainWebsite extends StatefulWidget {
+    const MainWebsite({super.key});
+
+    @override
+    State<MainWebsite> createState() => _MainWebsiteState();
   }
 
-  Future<void> signOut() async {
-    await FirebaseAuth.instance.signOut();
-    if (!mounted) return;
-    context.read<Cart>().clear();
-    navigate('Home');
-  }
+  class _MainWebsiteState extends State<MainWebsite> {
+    String currentPage = 'Home';
 
-  @override
-  Widget build(BuildContext context) {
-    final app = context.watch<AppState>();
-    final cart = context.watch<Cart>();
-    final pages = <String, Widget>{
-      'Home': HomePage(
-        onNavigate: navigate,
-      ),
-      'About': AboutPage(),
-      'Services': ServicesPage(
-        onNavigate: navigate,
-      ),
-      'Upskilling': LearningPage(
-        onNavigate: navigate,
-      ),
-      'Store': StorePage(onCart: () => navigate('Cart')),
-      'Cart': CartPage(onShop: () => navigate('Store')),
-      'Login': LoginPage(
-        onRegister: () => navigate('Register'),
-        onLoginSuccess: (_) async {
-          await app.refreshProfile();
-          navigate('Dashboard');
-        },
-      ),
-      'Register': RegisterPage(
-        onLogin: () => navigate('Login'),
-      ),
-      'Dashboard': app.isLoggedIn
-          ? DashboardPage(
-              role: app.role,
-              onNavigate: navigate,
-              onSignOut: signOut,
-            )
-          : LoginPage(
-              onRegister: () => navigate('Register'),
-              onLoginSuccess: (_) async {
-                await app.refreshProfile();
-                navigate('Dashboard');
-              },
+    /// Top-level menu, in the order the brief asks for.
+    static const menu = ['Home', 'About', 'Services', 'Upskilling', 'Store', 'Contact'];
+
+    @override
+    void initState() {
+      super.initState();
+      AppNav.register(navigate);
+    }
+
+    void navigate(String page) {
+      setState(() => currentPage = page);
+    }
+
+    Future<void> signOut() async {
+      await FirebaseAuth.instance.signOut();
+      if (!mounted) return;
+      context.read<Cart>().clear();
+      navigate('Home');
+    }
+
+    @override
+    Widget build(BuildContext context) {
+      final app = context.watch<AppState>();
+      final cart = context.watch<Cart>();
+      final pages = <String, Widget>{
+        'Home': HomePage(
+          onNavigate: navigate,
+        ),
+        'About': AboutPage(),
+        'Services': ServicesPage(
+          onNavigate: navigate,
+        ),
+        'Upskilling': LearningPage(
+          onNavigate: navigate,
+        ),
+        'Store': StorePage(onCart: () => navigate('Cart')),
+        'Cart': CartPage(onShop: () => navigate('Store')),
+        'Login': LoginPage(
+          onRegister: () => navigate('Register'),
+          onLoginSuccess: (_) async {
+            await app.refreshProfile();
+            navigate('Dashboard');
+          },
+        ),
+        'Register': RegisterPage(
+          onLogin: () => navigate('Login'),
+        ),
+        'Dashboard': app.isLoggedIn
+            ? DashboardPage(
+                role: app.role,
+                onNavigate: navigate,
+                onSignOut: signOut,
+              )
+            : LoginPage(
+                onRegister: () => navigate('Register'),
+                onLoginSuccess: (_) async {
+                  await app.refreshProfile();
+                  navigate('Dashboard');
+                },
+              ),
+        'Contact': const ContactPage(),
+      };
+
+      return Scaffold(
+        appBar: AppBar(
+          toolbarHeight: 76,
+          titleSpacing: 24,
+          title: InkWell(
+            onTap: () => navigate('Home'),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.auto_awesome, color: purple, size: 30),
+                SizedBox(width: 9),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'MT ALCHEMY',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Text(
+                      'LEARN • GROW • TRANSFORM',
+                      style: TextStyle(
+                        fontSize: 9,
+                        letterSpacing: 1,
+                        color: yellow,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-      'Contact': const ContactPage(),
-    };
-
-    return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 76,
-        titleSpacing: 24,
-        title: InkWell(
-          onTap: () => navigate('Home'),
-          child: const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.auto_awesome, color: purple, size: 30),
-              SizedBox(width: 9),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'MT ALCHEMY',
+          ),
+          actions: [
+            if (MediaQuery.sizeOf(context).width > 850)
+              ...[
+                ...menu,
+                if (app.isLoggedIn) 'Dashboard',
+              ].map(
+                    (page) => TextButton(
+                  onPressed: () => navigate(page),
+                  child: Text(
+                    page,
                     style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1,
-                      color: Colors.white,
+                      color: currentPage == page ? yellow : Colors.white,
+                      fontWeight: currentPage == page
+                          ? FontWeight.bold
+                          : FontWeight.w500,
                     ),
                   ),
-                  Text(
-                    'LEARN • GROW • TRANSFORM',
+                ),
+              ),
+            IconButton(
+              tooltip: 'Shopping cart',
+              onPressed: () => navigate('Cart'),
+              icon: Badge(
+                label: Text('${cart.count}'),
+                isLabelVisible: !cart.isEmpty,
+                child: const Icon(Icons.shopping_bag_outlined, color: Colors.white),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(right: 20, left: 4),
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: navy,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () => navigate(app.isLoggedIn ? 'Dashboard' : 'Login'),
+                child: Text(app.isLoggedIn ? 'My Dashboard' : 'Sign in'),
+              ),
+            ),
+          ],
+        ),
+        drawer: MediaQuery.sizeOf(context).width <= 850
+            ? Drawer(
+          child: SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.all(12),
+              children: [
+                const ListTile(
+                  leading: Icon(Icons.auto_awesome, color: purple),
+                  title: Text(
+                    'MT ALCHEMY',
                     style: TextStyle(
-                      fontSize: 9,
-                      letterSpacing: 1,
-                      color: yellow,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
                     ),
+                  ),
+                ),
+                const Divider(),
+                for (final page in [
+                  ...menu,
+                  'Cart',
+                  if (app.isLoggedIn) 'Dashboard' else 'Login',
+                ])
+                  ListTile(
+                    leading: Icon(_pageIcon(page)),
+                    title: Text(page),
+                    selected: currentPage == page,
+                    onTap: () {
+                      Navigator.pop(context);
+                      navigate(page);
+                    },
+                  ),
+              ],
+            ),
+          ),
+        )
+            : null,
+        body: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 350),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) {
+            final slide = Tween<Offset>(
+              begin: const Offset(0.025, 0),
+              end: Offset.zero,
+            ).animate(animation);
+
+            return FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: slide,
+                child: child,
+              ),
+            );
+          },
+          child: KeyedSubtree(
+            key: ValueKey(currentPage),
+            child: pages[currentPage] ?? pages['Home']!,
+          ),
+        ),
+      );
+    }
+
+    IconData _pageIcon(String page) {
+      switch (page) {
+        case 'Home':
+          return Icons.home_outlined;
+        case 'About':
+          return Icons.info_outline;
+        case 'Services':
+          return Icons.business_center_outlined;
+        case 'Upskilling':
+          return Icons.school_outlined;
+        case 'Store':
+          return Icons.storefront_outlined;
+        case 'Cart':
+          return Icons.shopping_cart_outlined;
+        case 'Contact':
+          return Icons.mail_outline;
+        case 'Dashboard':
+          return Icons.dashboard_outlined;
+        default:
+          return Icons.login;
+      }
+    }
+  }
+
+  class FloatingIcon extends StatefulWidget {
+    final IconData icon;
+    final double size;
+    final Color color;
+
+    const FloatingIcon({
+      super.key,
+      required this.icon,
+      required this.size,
+      required this.color,
+    });
+
+    @override
+    State<FloatingIcon> createState() => _FloatingIconState();
+  }
+
+  class _FloatingIconState extends State<FloatingIcon>
+      with SingleTickerProviderStateMixin {
+    late final AnimationController _controller;
+    late final Animation<double> _floatAnimation;
+
+    @override
+    void initState() {
+      super.initState();
+      _controller = AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 1800),
+      )..repeat(reverse: true);
+      _floatAnimation = Tween<double>(begin: -7, end: 7).animate(
+        CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+      );
+    }
+
+    @override
+    void dispose() {
+      _controller.dispose();
+      super.dispose();
+    }
+
+    @override
+    Widget build(BuildContext context) {
+      return AnimatedBuilder(
+        animation: _floatAnimation,
+        child: Icon(widget.icon, size: widget.size, color: widget.color),
+        builder: (context, child) => Transform.translate(
+          offset: Offset(0, _floatAnimation.value),
+          child: child,
+        ),
+      );
+    }
+  }
+
+  // -------------------- HOME PAGE --------------------
+
+  class HomePage extends StatelessWidget {
+    final ValueChanged<String> onNavigate;
+
+    const HomePage({super.key, required this.onNavigate});
+
+    @override
+    Widget build(BuildContext context) {
+      final width = MediaQuery.sizeOf(context).width;
+      final horizontal = width < 600 ? 22.0 : 64.0;
+
+      return SingleChildScrollView(
+        child: Column(
+          children: [
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.symmetric(
+                horizontal: horizontal,
+                vertical: width < 600 ? 45 : 110,
+              ),
+              decoration: const BoxDecoration(
+                image: DecorationImage(
+                  image: AssetImage('assets/images/hero.jpg'),
+                  fit: BoxFit.cover,
+                  colorFilter: ColorFilter.mode(
+                    Color(0x660B1428),
+                    BlendMode.darken,
+                  ),
+                ),
+                gradient: LinearGradient(
+                  colors: [
+                    Color(0xDD0B1428),
+                    Color(0xAA263A5A),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Wrap(
+                spacing: 40,
+                runSpacing: 35,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  SizedBox(
+                    width: width < 600 ? width - 44 : 520,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(30),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.25),
+                            ),
+                          ),
+                          child: const Text(
+                            'YOUR PARTNER IN LEARNING & GROWTH',
+                            style: TextStyle(
+                              color: yellow,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 25),
+                        const Text(
+                          'Unlock Your Potential.\nTransform Your Future.',
+                          style: TextStyle(
+                            fontSize: 42,
+                            height: 1.17,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        const Text(
+                          'Discover learning experiences, professional development '
+                              'programmes and digital resources designed to help '
+                              'individuals and organisations grow.',
+                          style: TextStyle(
+                            color: Color(0xFFE4E9F6),
+                            height: 1.8,
+                            fontSize: 15,
+                          ),
+                        ),
+                        const SizedBox(height: 30),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            FilledButton(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: yellow,
+                                foregroundColor: navy,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24,
+                                  vertical: 18,
+                                ),
+                              ),
+                              onPressed: () => onNavigate('Upskilling'),
+                              child: const Text('Explore Learning'),
+                            ),
+                            OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                side: const BorderSide(color: Colors.white70),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24,
+                                  vertical: 18,
+                                ),
+                              ),
+                              onPressed: () => onNavigate('Contact'),
+                              child: const Text('Contact Us'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+
+
+                ],
+              ),
+            ),
+            const SizedBox(height: 45),
+            const SectionHeading(
+              eyebrow: 'WHAT WE OFFER',
+              title: 'Everything you need to grow',
+              subtitle:
+              'Explore learning opportunities and resources for your next step.',
+            ),
+            const SizedBox(height: 28),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: horizontal),
+              child: Wrap(
+                spacing: 20,
+                runSpacing: 20,
+                children: [
+                  FeatureCard(
+                    icon: Icons.school_rounded,
+                    title: 'Online Learning',
+                    description:
+                    'Explore courses and develop practical professional skills.',
+                    image: 'assets/images/photo15.jpg',
+                    color: navy,
+                    onTap: () => onNavigate('Upskilling'),
+                  ),
+                  FeatureCard(
+                    icon: Icons.shopping_bag_rounded,
+                    title: 'Digital Store',
+                    description:
+                    'Discover digital learning materials and useful resources.',
+                    image: 'assets/images/photo16.jpg',
+                    color: purple,
+                    onTap: () => onNavigate('Store'),
+                  ),
+                  FeatureCard(
+                    icon: Icons.apartment_rounded,
+                    title: 'Corporate Training',
+                    description:
+                    'Find learning solutions designed for organisations and teams.',
+                    image: 'assets/images/photo17.jpg',
+                    color: const Color(0xFF168A79),
+                    onTap: () => onNavigate('Services'),
                   ),
                 ],
               ),
-            ],
-          ),
-        ),
-        actions: [
-          if (MediaQuery.sizeOf(context).width > 850)
-            ...[
-              ...menu,
-              if (app.isLoggedIn) 'Dashboard',
-            ].map(
-                  (page) => TextButton(
-                onPressed: () => navigate(page),
-                child: Text(
-                  page,
-                  style: TextStyle(
-                    color: currentPage == page ? yellow : Colors.white,
-                    fontWeight: currentPage == page
-                        ? FontWeight.bold
-                        : FontWeight.w500,
+            ),
+
+            const SizedBox(height: 50),
+            const SectionHeading(
+              eyebrow: 'FEATURED COURSES',
+              title: 'Learning for your next chapter',
+              subtitle: 'Start exploring our sample learning catalogue.',
+            ),
+            const SizedBox(height: 24),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: horizontal),
+              child: CourseCatalogue(
+                limit: 3,
+                cardBuilder: (course, onTap) =>
+                    CourseCard(course: course, onTap: onTap),
+              ),
+            ),
+            const SizedBox(height: 45),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 45,
+              ),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    const Color(0xFF102C50),
+                    const Color(0xFF293B68),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1250),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isMobile = constraints.maxWidth < 650;
+
+                      final stats = [
+                        {
+                          'number': '1,100+',
+                          'label': 'Participants impacted',
+                        },
+                        {
+                          'number': '120+',
+                          'label': 'Programmes delivered',
+                        },
+                        {
+                          'number': '35+',
+                          'label': 'Partner organisations',
+                        },
+                        {
+                          'number': '6',
+                          'label': 'Specialist focus areas',
+                        },
+                      ];
+
+                      return Wrap(
+                        alignment: WrapAlignment.center,
+                        runSpacing: 30,
+                        spacing: 15,
+                        children: stats.map((stat) {
+                          return SizedBox(
+                            width: isMobile
+                                ? (constraints.maxWidth - 15) / 2
+                                : (constraints.maxWidth - 45) / 4,
+                            child: Column(
+                              children: [
+                                Text(
+                                  stat['number']!,
+                                  style: const TextStyle(
+                                    fontSize: 38,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFFFFC83D),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  stat['label']!,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white70,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      );
+                    },
                   ),
                 ),
               ),
-            ),
-          IconButton(
-            tooltip: 'Shopping cart',
-            onPressed: () => navigate('Cart'),
-            icon: Badge(
-              label: Text('${cart.count}'),
-              isLabelVisible: !cart.isEmpty,
-              child: const Icon(Icons.shopping_bag_outlined, color: Colors.white),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 20, left: 4),
-            child: FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: navy,
-                foregroundColor: Colors.white,
+            ),Container(
+              width: double.infinity,
+              padding: EdgeInsets.symmetric(
+                horizontal: horizontal,
+                vertical: 42,
               ),
-              onPressed: () => navigate(app.isLoggedIn ? 'Dashboard' : 'Login'),
-              child: Text(app.isLoggedIn ? 'My Dashboard' : 'Sign in'),
-            ),
-          ),
-        ],
-      ),
-      drawer: MediaQuery.sizeOf(context).width <= 850
-          ? Drawer(
-        child: SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.all(12),
-            children: [
-              const ListTile(
-                leading: Icon(Icons.auto_awesome, color: purple),
-                title: Text(
-                  'MT ALCHEMY',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
+              color: const Color(0xFFF3E7C8),
+              child: Wrap(
+                spacing: 25,
+                runSpacing: 20,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  const SizedBox(
+                    width: 500,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Ready to take the next step?',
+                          style: TextStyle(
+                            color: navy,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 27,
+                          ),
+                        ),
+                        SizedBox(height: 10),
+                        Text(
+                          'Explore learning programmes or talk to us about '
+                              'your organisation’s training needs.',
+                          style: TextStyle(height: 1.7),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                  FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: navy,
+                      padding: const EdgeInsets.all(20),
+                    ),
+                    onPressed: () => onNavigate('Contact'),
+                    child: const Text('Get in Touch'),
+                  ),
+                ],
               ),
-              const Divider(),
-              for (final page in [
-                ...menu,
-                'Cart',
-                if (app.isLoggedIn) 'Dashboard' else 'Login',
-              ])
-                ListTile(
-                  leading: Icon(_pageIcon(page)),
-                  title: Text(page),
-                  selected: currentPage == page,
-                  onTap: () {
-                    Navigator.pop(context);
-                    navigate(page);
-                  },
-                ),
-            ],
-          ),
-        ),
-      )
-          : null,
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 350),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        transitionBuilder: (child, animation) {
-          final slide = Tween<Offset>(
-            begin: const Offset(0.025, 0),
-            end: Offset.zero,
-          ).animate(animation);
-
-          return FadeTransition(
-            opacity: animation,
-            child: SlideTransition(
-              position: slide,
-              child: child,
             ),
-          );
-        },
-        child: KeyedSubtree(
-          key: ValueKey(currentPage),
-          child: pages[currentPage] ?? pages['Home']!,
-        ),
-      ),
-    );
-  }
 
-  IconData _pageIcon(String page) {
-    switch (page) {
-      case 'Home':
-        return Icons.home_outlined;
-      case 'About':
-        return Icons.info_outline;
-      case 'Services':
-        return Icons.business_center_outlined;
-      case 'Upskilling':
-        return Icons.school_outlined;
-      case 'Store':
-        return Icons.storefront_outlined;
-      case 'Cart':
-        return Icons.shopping_cart_outlined;
-      case 'Contact':
-        return Icons.mail_outline;
-      case 'Dashboard':
-        return Icons.dashboard_outlined;
-      default:
-        return Icons.login;
+
+
+
+        // Existing beige Ready to take the next step section
+
+            const SiteFooter(),
+          ],
+        ),
+      );
     }
   }
-}
 
-class FloatingIcon extends StatefulWidget {
-  final IconData icon;
-  final double size;
-  final Color color;
+  // -------------------- ABOUT PAGE --------------------
 
-  const FloatingIcon({
-    super.key,
-    required this.icon,
-    required this.size,
-    required this.color,
-  });
 
-  @override
-  State<FloatingIcon> createState() => _FloatingIconState();
-}
+  class AboutPage extends StatelessWidget {
+    AboutPage({super.key});
 
-class _FloatingIconState extends State<FloatingIcon>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _floatAnimation;
 
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    )..repeat(reverse: true);
-    _floatAnimation = Tween<double>(begin: -7, end: 7).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-  }
+    final List<Map<String, dynamic>> values = [
+      {
+        'icon': Icons.lightbulb_outline,
+        'title': 'Innovation',
+        'text': 'Encouraging new ideas and continuous improvement.',
+        'image': 'assets/images/photo21.jpg',
+      },
+      {
+        'icon': Icons.handshake_outlined,
+        'title': 'Collaboration',
+        'text': 'Supporting people and organisations to grow together.',
+        'image': 'assets/images/photo22.jpg',
+      },
+      {
+        'icon': Icons.trending_up,
+        'title': 'Growth',
+        'text': 'Building skills and creating meaningful learning outcomes.',
+        'image': 'assets/images/photo23.jpg',
+      },
+    ];
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
 
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _floatAnimation,
-      child: Icon(widget.icon, size: widget.size, color: widget.color),
-      builder: (context, child) => Transform.translate(
-        offset: Offset(0, _floatAnimation.value),
-        child: child,
-      ),
-    );
-  }
-}
+    @override
+    Widget build(BuildContext context) {
+      return SingleChildScrollView(
+        child: Column(
+          children: [
 
-// -------------------- HOME PAGE --------------------
-
-class HomePage extends StatelessWidget {
-  final ValueChanged<String> onNavigate;
-
-  const HomePage({super.key, required this.onNavigate});
-
-  @override
-  Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
-    final horizontal = width < 600 ? 22.0 : 64.0;
-
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.symmetric(
-              horizontal: horizontal,
-              vertical: width < 600 ? 45 : 76,
-            ),
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [navy, blue, Color(0xFF263A5A)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: SizedBox(
+                width: double.infinity,
+                height: 300,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.asset(
+                      'assets/images/photo21.jpg',
+                      fit: BoxFit.cover,
+                    ),
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Color(0xE6091A35),
+                            Color(0xB3091A35),
+                            Color(0x66D6B15E),
+                          ],
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text(
+                            'About MT Alchemy',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 38,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(height: 14),
+                          Text(
+                            'Supporting learning, professional development and organisational growth.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 16,
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            child: Wrap(
-              spacing: 40,
-              runSpacing: 35,
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                SizedBox(
-                  width: width < 600 ? width - 44 : 520,
+
+            const SizedBox(height: 42),
+
+            const SizedBox(height: 20),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 28),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1000),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Learning with purpose',
+                      style: TextStyle(
+                        color: navy,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 29,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'MT Alchemy is presented here as a corporate learning '
+                          'and development platform. The website brings learning '
+                          'resources, training services and digital products into '
+                          'one accessible experience for individuals and organisations.',
+                      style: TextStyle(height: 1.9, fontSize: 16),
+                    ),
+                    const SizedBox(height: 35),
+                    Wrap(
+                      spacing: 18,
+                      runSpacing: 18,
+
+                      children: values.map((value) {
+                        return FeatureCard(
+                          icon: value['icon'] as IconData,
+                          title: value['title'] as String,
+                          description: value['text'] as String,
+                          color: purple,
+                          image: value['image'] as String,
+                        );
+                      }).toList(),
+
+                    ),
+                    const SizedBox(height: 35),
+                    const Text(
+                      'Our goal',
+                      style: TextStyle(
+                        color: navy,
+                        fontSize: 25,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Provide a central place to explore courses, access '
+                          'resources and discover training opportunities. '
+                          'Organisation-specific information can be added from '
+                          'the official company profile.',
+                      style: TextStyle(height: 1.8, fontSize: 15),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 28,
+                vertical: 55,
+              ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1050),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
+                          horizontal: 16,
                           vertical: 8,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.12),
+                          color: const Color(0xFFFFF5DF),
                           borderRadius: BorderRadius.circular(30),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.25),
+                            color: const Color(0xFFE5BD62),
                           ),
                         ),
                         child: const Text(
-                          'YOUR PARTNER IN LEARNING & GROWTH',
+                          'OUR FOUNDER',
                           style: TextStyle(
-                            color: yellow,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF17243B),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
                             letterSpacing: 1,
                           ),
                         ),
                       ),
-                      const SizedBox(height: 25),
+                      const SizedBox(height: 22),
                       const Text(
-                        'Unlock Your Potential.\nTransform Your Future.',
+                        'Mabel Tan KH',
                         style: TextStyle(
-                          fontSize: 42,
-                          height: 1.17,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
+                          fontSize: 36,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF101D32),
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 12),
                       const Text(
-                        'Discover learning experiences, professional development '
-                            'programmes and digital resources designed to help '
-                            'individuals and organisations grow.',
+                        'Founder | EQ Coach | HRDC Certified Trainer',
                         style: TextStyle(
-                          color: Color(0xFFE4E9F6),
+                          fontSize: 17,
+                          color: Color(0xFF718096),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      const Text(
+                        'Mabel Tan KH believes that meaningful organisational '
+                            'transformation begins with understanding both people '
+                            'and the systems they work within. Her approach brings '
+                            'together personal development, emotional intelligence '
+                            'and organisational growth.',
+                        style: TextStyle(
+                          fontSize: 16,
                           height: 1.8,
-                          fontSize: 15,
+                          color: Color(0xFF64748B),
                         ),
                       ),
-                      const SizedBox(height: 30),
+                      const SizedBox(height: 18),
+                      const Text(
+                        'Through her work, she supports individuals and teams '
+                            'in developing self-awareness, resilience and authentic '
+                            'leadership. She is passionate about helping organisations '
+                            'build healthier workplace cultures and create lasting '
+                            'positive change.',
+                        style: TextStyle(
+                          fontSize: 16,
+                          height: 1.8,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
                       Wrap(
                         spacing: 12,
                         runSpacing: 12,
                         children: [
-                          FilledButton(
-                            style: FilledButton.styleFrom(
-                              backgroundColor: yellow,
-                              foregroundColor: navy,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
-                                vertical: 18,
-                              ),
-                            ),
-                            onPressed: () => onNavigate('Upskilling'),
-                            child: const Text('Explore Learning'),
-                          ),
-                          OutlinedButton(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.white,
-                              side: const BorderSide(color: Colors.white70),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
-                                vertical: 18,
-                              ),
-                            ),
-                            onPressed: () => onNavigate('Contact'),
-                            child: const Text('Contact Us'),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  width: width < 600 ? width - 44 : 330,
-                  padding: const EdgeInsets.all(30),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(28),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.2),
-                    ),
-                  ),
-                  child: const Column(
-                    children: [
-                      FloatingIcon(
-                        icon: Icons.auto_awesome,
-                        size: 75,
-                        color: yellow,
-                      ),
-                      SizedBox(height: 18),
-                      Text(
-                        'Learning that creates impact',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 23,
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      SizedBox(height: 12),
-                      Text(
-                        'Build knowledge. Develop skills. Make a difference.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white70,
-                          height: 1.6,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 45),
-          const SectionHeading(
-            eyebrow: 'WHAT WE OFFER',
-            title: 'Everything you need to grow',
-            subtitle:
-            'Explore learning opportunities and resources for your next step.',
-          ),
-          const SizedBox(height: 28),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: horizontal),
-            child: Wrap(
-              spacing: 20,
-              runSpacing: 20,
-              children: [
-                FeatureCard(
-                  icon: Icons.school_rounded,
-                  title: 'Online Learning',
-                  description:
-                  'Explore courses and develop practical professional skills.',
-                  color: navy,
-                  onTap: () => onNavigate('Upskilling'),
-                ),
-                FeatureCard(
-                  icon: Icons.shopping_bag_rounded,
-                  title: 'Digital Store',
-                  description:
-                  'Discover digital learning materials and useful resources.',
-                  color: purple,
-                  onTap: () => onNavigate('Store'),
-                ),
-                FeatureCard(
-                  icon: Icons.apartment_rounded,
-                  title: 'Corporate Training',
-                  description:
-                  'Find learning solutions designed for organisations and teams.',
-                  color: const Color(0xFF168A79),
-                  onTap: () => onNavigate('Services'),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 50),
-          const SectionHeading(
-            eyebrow: 'FEATURED COURSES',
-            title: 'Learning for your next chapter',
-            subtitle: 'Start exploring our sample learning catalogue.',
-          ),
-          const SizedBox(height: 24),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: horizontal),
-            child: CourseCatalogue(
-              limit: 3,
-              cardBuilder: (course, onTap) =>
-                  CourseCard(course: course, onTap: onTap),
-            ),
-          ),
-          const SizedBox(height: 45),
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.symmetric(
-              horizontal: horizontal,
-              vertical: 42,
-            ),
-            color: const Color(0xFFF3E7C8),
-            child: Wrap(
-              spacing: 25,
-              runSpacing: 20,
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                const SizedBox(
-                  width: 500,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Ready to take the next step?',
-                        style: TextStyle(
-                          color: navy,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 27,
-                        ),
-                      ),
-                      SizedBox(height: 10),
-                      Text(
-                        'Explore learning programmes or talk to us about '
-                            'your organisation’s training needs.',
-                        style: TextStyle(height: 1.7),
-                      ),
-                    ],
-                  ),
-                ),
-                FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: navy,
-                    padding: const EdgeInsets.all(20),
-                  ),
-                  onPressed: () => onNavigate('Contact'),
-                  child: const Text('Get in Touch'),
-                ),
-              ],
-            ),
-          ),
-          const SiteFooter(),
-        ],
-      ),
-    );
-  }
-}
-
-// -------------------- ABOUT PAGE --------------------
-
-class AboutPage extends StatelessWidget {
-  AboutPage({super.key});
-
-  final List<Map<String, dynamic>> values = [
-    {
-      'icon': Icons.lightbulb_outline,
-      'title': 'Innovation',
-      'text': 'Encouraging new ideas and continuous improvement.',
-    },
-    {
-      'icon': Icons.handshake_outlined,
-      'title': 'Collaboration',
-      'text': 'Supporting people and organisations to grow together.',
-    },
-    {
-      'icon': Icons.trending_up,
-      'title': 'Growth',
-      'text': 'Building skills and creating meaningful learning outcomes.',
-    },
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          const PageBanner(
-            title: 'About MT Alchemy',
-            subtitle:
-            'Supporting learning, professional development and organisational growth.',
-          ),
-          const SizedBox(height: 42),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 28),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1000),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Learning with purpose',
-                    style: TextStyle(
-                      color: navy,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 29,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'MT Alchemy is presented here as a corporate learning '
-                        'and development platform. The website brings learning '
-                        'resources, training services and digital products into '
-                        'one accessible experience for individuals and organisations.',
-                    style: TextStyle(height: 1.9, fontSize: 16),
-                  ),
-                  const SizedBox(height: 35),
-                  Wrap(
-                    spacing: 18,
-                    runSpacing: 18,
-                    children: values.map((value) {
-                      return FeatureCard(
-                        icon: value['icon'] as IconData,
-                        title: value['title'] as String,
-                        description: value['text'] as String,
-                        color: purple,
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 35),
-                  const Text(
-                    'Our goal',
-                    style: TextStyle(
-                      color: navy,
-                      fontSize: 25,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Provide a central place to explore courses, access '
-                        'resources and discover training opportunities. '
-                        'Organisation-specific information can be added from '
-                        'the official company profile.',
-                    style: TextStyle(height: 1.8, fontSize: 15),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 45),
-          const SiteFooter(),
-        ],
-      ),
-    );
-  }
-}
-
-// -------------------- SERVICES PAGE --------------------
-
-class ServicesPage extends StatelessWidget {
-  final ValueChanged<String> onNavigate;
-
-  const ServicesPage({super.key, required this.onNavigate});
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          const PageBanner(
-            title: 'Our Services',
-            subtitle:
-            'Learning and development experiences for individuals and organisations.',
-          ),
-          const SizedBox(height: 35),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Wrap(
-              spacing: 20,
-              runSpacing: 20,
-              children: const [
-                ServiceCard(
-                  icon: Icons.cast_for_education,
-                  title: 'Learning Programmes',
-                  text:
-                  'Explore structured learning experiences and professional development.',
-                ),
-                ServiceCard(
-                  icon: Icons.groups_2_outlined,
-                  title: 'Corporate Training',
-                  text:
-                  'Plan training opportunities around organisational needs.',
-                ),
-                ServiceCard(
-                  icon: Icons.analytics_outlined,
-                  title: 'Learning Progress',
-                  text:
-                  'Support learning oversight and progress reporting for teams.',
-                ),
-                ServiceCard(
-                  icon: Icons.devices_outlined,
-                  title: 'Digital Resources',
-                  text:
-                  'Access digital materials that support learning and development.',
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 35),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: navy,
-              padding: const EdgeInsets.all(20),
-            ),
-            onPressed: () => onNavigate('Contact'),
-            child: const Text('Enquire About Training'),
-          ),
-          const SizedBox(height: 45),
-          const SiteFooter(),
-        ],
-      ),
-    );
-  }
-}
-
-// -------------------- LEARNING HUB --------------------
-
-class LearningPage extends StatelessWidget {
-  final ValueChanged<String> onNavigate;
-
-  const LearningPage({super.key, required this.onNavigate});
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          const PageBanner(
-            title: 'Learning Hub: Learn. Apply. Grow.',
-            subtitle:
-            'Self-paced courses on emotional intelligence, leadership and well-being, '
-            'with quizzes and certificates.',
-          ),
-          const SizedBox(height: 30),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: CourseCatalogue(
-              cardBuilder: (course, onTap) =>
-                  CourseCard(course: course, onTap: onTap),
-            ),
-          ),
-          const SizedBox(height: 35),
-          const SiteFooter(),
-        ],
-      ),
-    );
-  }
-}
-
-// -------------------- STORE --------------------
-
-class StorePage extends StatelessWidget {
-  final VoidCallback onCart;
-
-  const StorePage({super.key, required this.onCart});
-
-  @override
-  Widget build(BuildContext context) {
-    final cart = context.watch<Cart>();
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          const PageBanner(
-            title: 'MT Alchemy Store',
-            subtitle:
-            'Digital downloads and physical learning tools for individuals and teams.',
-          ),
-          const SizedBox(height: 30),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 24),
-            child: StoreCatalogue(),
-          ),
-          const SizedBox(height: 25),
-          OutlinedButton.icon(
-            onPressed: onCart,
-            icon: const Icon(Icons.shopping_cart_outlined),
-            label: Text('View Cart (${cart.count})'),
-          ),
-          const SizedBox(height: 45),
-          const SiteFooter(),
-        ],
-      ),
-    );
-  }
-}
-
-// -------------------- CART --------------------
-
-class CartPage extends StatelessWidget {
-  final VoidCallback onShop;
-
-  const CartPage({super.key, required this.onShop});
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          const PageBanner(
-            title: 'Your Cart',
-            subtitle: 'Review your items, then check out securely.',
-          ),
-          const SizedBox(height: 30),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 850),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: CartView(onShop: onShop),
-            ),
-          ),
-          const SizedBox(height: 45),
-          const SiteFooter(),
-        ],
-      ),
-    );
-  }
-}
-
-// -------------------- LOGIN PAGE --------------------
-
-
-// -------------------- LOGIN PAGE --------------------
-
-class LoginPage extends StatefulWidget {
-  final VoidCallback onRegister;
-  final ValueChanged<String> onLoginSuccess;
-
-  const LoginPage({
-    super.key,
-    required this.onRegister,
-    required this.onLoginSuccess,
-  });
-
-  @override
-  State<LoginPage> createState() => _LoginPageState();
-}
-
-class _LoginPageState extends State<LoginPage> {
-  final formKey = GlobalKey<FormState>();
-  final emailController = TextEditingController();
-  final passwordController = TextEditingController();
-
-  bool hidePassword = true;
-  bool isLoading = false;
-  String selectedRole = 'Individual';
-
-  @override
-  void dispose() {
-    emailController.dispose();
-    passwordController.dispose();
-    super.dispose();
-  }
-
-  Future<void> signIn() async {
-    if (!formKey.currentState!.validate()) return;
-
-    setState(() => isLoading = true);
-
-    try {
-      final credential = await FirebaseAuth.instance
-          .signInWithEmailAndPassword(
-        email: emailController.text.trim(),
-        password: passwordController.text,
-      );
-
-      final user = credential.user;
-      if (user == null) {
-        throw Exception('Firebase returned no signed-in user.');
-      }
-
-      final profileSnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-
-      if (!profileSnapshot.exists) {
-        await FirebaseAuth.instance.signOut();
-        throw Exception(
-          'Your user profile was not found in Firestore. Please contact the administrator.',
-        );
-      }
-
-      final profile = profileSnapshot.data() ?? <String, dynamic>{};
-      final role = (profile['role'] ?? '').toString().trim();
-      final status = (profile['status'] ?? 'Active').toString().trim();
-
-      if (status.toLowerCase() != 'active') {
-        await FirebaseAuth.instance.signOut();
-        throw Exception('This account is not active. Please contact the administrator.');
-      }
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Login successful. Welcome ${user.email ?? ''}'),
-        ),
-      );
-      widget.onLoginSuccess(
-        ['Individual', 'Employer', 'Trainer', 'Super Admin'].contains(role)
-            ? role
-            : 'Individual',
-      );
-    } on FirebaseAuthException catch (e) {
-      if (!mounted) return;
-
-      String message;
-      switch (e.code) {
-        case 'invalid-email':
-          message = 'Please enter a valid email address.';
-          break;
-        case 'user-not-found':
-        case 'invalid-credential':
-        case 'wrong-password':
-          message = 'Invalid email or password.';
-          break;
-        case 'user-disabled':
-          message = 'This account has been disabled.';
-          break;
-        case 'too-many-requests':
-          message = 'Too many attempts. Please try again later.';
-          break;
-        case 'network-request-failed':
-          message = 'Network error. Check your internet connection.';
-          break;
-        default:
-          message = e.message ?? 'Sign-in failed. Please try again.';
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
-    } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => isLoading = false);
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Center(
-        child: Container(
-          width: 440,
-          padding: const EdgeInsets.all(30),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFFE8E2D5)),
-          ),
-          child: Form(
-            key: formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Icon(
-                  Icons.lock_person_outlined,
-                  size: 55,
-                  color: purple,
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Welcome Back',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 27,
-                    fontWeight: FontWeight.bold,
-                    color: navy,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Sign in to continue your learning journey.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.black54),
-                ),
-                const SizedBox(height: 28),
-                const Text('Account type'),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  initialValue: selectedRole,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                  ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'Individual',
-                      child: Text('Individual'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'Employer',
-                      child: Text('Employer'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'Trainer',
-                      child: Text('Trainer'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'Super Admin',
-                      child: Text('Super Admin'),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() => selectedRole = value);
-                    }
-                  },
-                ),
-                const SizedBox(height: 18),
-                const Text('Email address'),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    hintText: 'you@example.com',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.email_outlined),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter your email address';
-                    }
-                    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
-                        .hasMatch(value.trim())) {
-                      return 'Please enter a valid email address';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 18),
-                const Text('Password'),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: passwordController,
-                  obscureText: hidePassword,
-                  decoration: InputDecoration(
-                    hintText: 'Enter your password',
-                    border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    suffixIcon: IconButton(
-                      onPressed: () {
-                        setState(() => hidePassword = !hidePassword);
-                      },
-                      icon: Icon(
-                        hidePassword
-                            ? Icons.visibility
-                            : Icons.visibility_off,
-                      ),
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your password';
-                    }
-                    if (value.length < 6) {
-                      return 'Password must be at least 6 characters';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 24),
-                FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: navy,
-                    padding: const EdgeInsets.all(18),
-                  ),
-                  onPressed: isLoading ? null : signIn,
-                  child: isLoading
-                      ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                      : const Text('Sign In'),
-                ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text("Don't have an account?"),
-                    TextButton(
-                      onPressed: widget.onRegister,
-                      child: const Text('Create account'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 15),
-                const Text(
-                  'Sign in securely with your MT Alchemy account.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.black54,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-
-
-// -------------------- ROLE-BASED DASHBOARD --------------------
-
-class DashboardPage extends StatelessWidget {
-  final String role;
-  final ValueChanged<String> onNavigate;
-  final VoidCallback onSignOut;
-
-  const DashboardPage({
-    super.key,
-    required this.role,
-    required this.onNavigate,
-    required this.onSignOut,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isAdmin = role == 'Super Admin';
-    final isEmployer = role == 'Employer';
-    final isTrainer = role == 'Trainer';
-
-    final title = isAdmin
-        ? 'Administrator Dashboard'
-        : isEmployer
-        ? 'Employer Dashboard'
-        : isTrainer
-        ? 'Trainer Dashboard'
-        : 'My Learning Dashboard';
-
-    final subtitle = isAdmin
-        ? 'Manage the MT Alchemy learning platform.'
-        : isEmployer
-        ? 'Explore learning solutions for your organisation.'
-        : isTrainer
-        ? 'Access learning resources and training tools.'
-        : 'Continue your learning and discover new resources.';
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1120),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(30),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [navy, blue],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: yellow.withValues(alpha: 0.45)),
-                ),
-                child: Wrap(
-                  alignment: WrapAlignment.spaceBetween,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 20,
-                  runSpacing: 18,
-                  children: [
-                    SizedBox(
-                      width: 650,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'MT ALCHEMY  /  YOUR WORKSPACE',
-                            style: TextStyle(
-                              color: yellow,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.4,
-                              fontSize: 11,
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          Text(
-                            title,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 30,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            subtitle,
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              height: 1.6,
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          Container(
+                          'EQ Coach',
+                          'HRDC Certified Trainer',
+                          'Experiential Learning',
+                        ].map((tag) {
+                          return Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 13,
-                              vertical: 8,
+                              horizontal: 15,
+                              vertical: 9,
                             ),
                             decoration: BoxDecoration(
-                              color: yellow.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(30),
+                              color: const Color(0xFFF1ECF8),
+                              borderRadius: BorderRadius.circular(25),
                               border: Border.all(
-                                color: yellow.withValues(alpha: 0.5),
+                                color: const Color(0xFFD5C5E8),
                               ),
                             ),
                             child: Text(
-                              'Account role: $role',
+                              tag,
                               style: const TextStyle(
-                                color: yellow,
-                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                                color: Color(0xFF76539A),
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
-                          ),
-                        ],
+                          );
+                        }).toList(),
                       ),
-                    ),
-                    FilledButton.icon(
-                      onPressed: onSignOut,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: yellow,
-                        foregroundColor: navy,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 16,
-                        ),
-                      ),
-                      icon: const Icon(Icons.logout_rounded),
-                      label: const Text('Sign out'),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 30),
-              RoleDashboard(role: role, onNavigate: onNavigate),
-              const SizedBox(height: 35),
-              const SiteFooter(),
-            ],
-          ),
+            ),
+            const SizedBox(height: 45),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 55,
+              ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1250),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'How we work',
+                        style: TextStyle(
+                          fontSize: 34,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF2346B8),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'A four-step transformation pathway — the thinking behind every engagement.',
+                        style: TextStyle(
+                          fontSize: 17,
+                          color: Color(0xFF657394),
+                        ),
+                      ),
+                      const SizedBox(height: 30),
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final isMobile = constraints.maxWidth < 700;
+                          final steps = [
+                            {
+                              'number': '01',
+                              'title': 'Discover',
+                              'description':
+                              'Listen to your people, understand your culture and identify what matters most.',
+                              'icon': Icons.search,
+                            },
+                            {
+                              'number': '02',
+                              'title': 'Design',
+                              'description':
+                              'Shape a practical, people-centred programme around your organisation.',
+                              'icon': Icons.design_services_outlined,
+                            },
+                            {
+                              'number': '03',
+                              'title': 'Deliver',
+                              'description':
+                              'Bring ideas to life through meaningful learning and engaging experiences.',
+                              'icon': Icons.handshake_outlined,
+                            },
+                            {
+                              'number': '04',
+                              'title': 'Sustain',
+                              'description':
+                              'Build lasting habits that support continued growth and positive change.',
+                              'icon': Icons.trending_up,
+                            },
+                          ];
+
+                          return Wrap(
+                            spacing: 16,
+                            runSpacing: 16,
+                            children: steps.map((step) {
+                              return SizedBox(
+                                width: isMobile
+                                    ? constraints.maxWidth
+                                    : (constraints.maxWidth - 48) / 4,
+                                child: Container(
+                                  padding: const EdgeInsets.all(22),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(15),
+                                    border: Border.all(
+                                      color: const Color(0xFFDCE3F3),
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.04),
+                                        blurRadius: 12,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 23,
+                                            backgroundColor:
+                                            const Color(0xFF3154C9),
+                                            child: Icon(
+                                              step['icon'] as IconData,
+                                              color: Colors.white,
+                                              size: 23,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 15),
+                                          Text(
+                                            step['number'] as String,
+                                            style: const TextStyle(
+                                              fontSize: 27,
+                                              fontWeight: FontWeight.bold,
+                                              color: Color(0xFF6335D8),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 20),
+                                      Text(
+                                        step['title'] as String,
+                                        style: const TextStyle(
+                                          fontSize: 21,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF2346B8),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Text(
+                                        step['description'] as String,
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          height: 1.6,
+                                          color: Color(0xFF657394),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 35),
+
+
+            const SizedBox(height: 35),
+
+            const SiteFooter(),
+          ],
         ),
-      ),
-    );
-  }
-}
-
-// -------------------- CONTACT PAGE --------------------
-
-class ContactPage extends StatefulWidget {
-  const ContactPage({super.key});
-
-  @override
-  State<ContactPage> createState() => _ContactPageState();
-}
-
-class _ContactPageState extends State<ContactPage> {
-  final formKey = GlobalKey<FormState>();
-  final nameController = TextEditingController();
-  final emailController = TextEditingController();
-  final phoneController = TextEditingController();
-  final organizationController = TextEditingController();
-  final messageController = TextEditingController();
-  String enquiryType = enquiryTypes.first;
-  bool sending = false;
-
-  @override
-  void dispose() {
-    nameController.dispose();
-    emailController.dispose();
-    phoneController.dispose();
-    organizationController.dispose();
-    messageController.dispose();
-    super.dispose();
-  }
-
-  Future<void> submit() async {
-    if (!formKey.currentState!.validate()) return;
-    setState(() => sending = true);
-    try {
-      await Db.addEnquiry(Enquiry(
-        name: nameController.text.trim(),
-        email: emailController.text.trim(),
-        phone: phoneController.text.trim(),
-        organization: organizationController.text.trim(),
-        type: enquiryType,
-        message: messageController.text.trim(),
-      ));
-      if (!mounted) return;
-      formKey.currentState!.reset();
-      for (final c in [
-        nameController,
-        emailController,
-        phoneController,
-        organizationController,
-        messageController,
-      ]) {
-        c.clear();
-      }
-      showSnack(context,
-          'Thank you! Your enquiry was received. Our team will contact you within 2 working days.');
-    } catch (e) {
-      if (mounted) showSnack(context, 'Sorry, the enquiry could not be sent: $e');
-    } finally {
-      if (mounted) setState(() => sending = false);
+      );
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          const PageBanner(
-            title: "Let's build a thriving workplace together.",
-            subtitle:
-            'Tell us about your coaching, training or partnership needs and we will get back to you.',
-          ),
-          Padding(
-            padding: const EdgeInsets.all(24),
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 650),
-              padding: const EdgeInsets.all(28),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: const Color(0xFFE8E2D5)),
-              ),
-              child: Form(
-                key: formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+  // -------------------- SERVICES PAGE --------------------
+
+  class ServicesPage extends StatelessWidget {
+    final ValueChanged<String> onNavigate;
+
+    const ServicesPage({super.key, required this.onNavigate});
+
+    @override
+    Widget build(BuildContext context) {
+      return SingleChildScrollView(
+        child: Column(
+          children: [
+
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: SizedBox(
+                width: double.infinity,
+                height: 260,
+                child: Stack(
+                  fit: StackFit.expand,
                   children: [
-                    const Text(
-                      'Send us an enquiry',
-                      style: TextStyle(
-                        fontSize: 25,
-                        fontWeight: FontWeight.bold,
-                        color: navy,
+                    Image.asset(
+                      'assets/images/photo22.jpg',
+                      fit: BoxFit.cover,
+                    ),
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            navy.withValues(alpha: 0.85),
+                            navy.withValues(alpha: 0.55),
+                            const Color(0xFF000000).withValues(alpha: 0.25),
+                          ],
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 22),
-                    TextFormField(
-                      controller: nameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Full name',
-                        prefixIcon: Icon(Icons.person_outline),
-                      ),
-                      validator: (value) =>
-                      value == null || value.trim().isEmpty
-                          ? 'Please enter your name'
-                          : null,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                        labelText: 'Email address',
-                        prefixIcon: Icon(Icons.email_outlined),
-                      ),
-                      validator: (value) {
-                        if (value == null ||
-                            !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
-                                .hasMatch(value.trim())) {
-                          return 'Please enter a valid email address';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: phoneController,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(
-                        labelText: 'Phone (optional)',
-                        prefixIcon: Icon(Icons.phone_outlined),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: organizationController,
-                      decoration: const InputDecoration(
-                        labelText: 'Organization (optional)',
-                        prefixIcon: Icon(Icons.business_outlined),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      initialValue: enquiryType,
-                      decoration: const InputDecoration(
-                        labelText: 'Enquiry type',
-                        prefixIcon: Icon(Icons.category_outlined),
-                      ),
-                      items: [
-                        for (final t in enquiryTypes)
-                          DropdownMenuItem(value: t, child: Text(t)),
+                    const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Our Services',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 36,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(height: 14),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 20),
+                          child: Text(
+                            'Learning and development experiences for individuals and organisations.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
                       ],
-                      onChanged: (v) => setState(() => enquiryType = v ?? enquiryType),
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: messageController,
-                      maxLines: 5,
-                      decoration: const InputDecoration(
-                        labelText: 'How can we help?',
-                        alignLabelWithHint: true,
-                      ),
-                      validator: (value) =>
-                      value == null || value.trim().length < 10
-                          ? 'Please enter at least 10 characters'
-                          : null,
-                    ),
-                    const SizedBox(height: 20),
-                    FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: navy,
-                        padding: const EdgeInsets.all(18),
-                      ),
-                      onPressed: sending ? null : submit,
-                      child: Text(sending ? 'Sending…' : 'Submit Enquiry'),
                     ),
                   ],
                 ),
               ),
             ),
-          ),
-          const SiteFooter(),
-        ],
-      ),
-    );
-  }
-}
 
-// -------------------- REUSABLE WIDGETS --------------------
+            const SizedBox(height: 24),
+            const SizedBox(height: 35),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Wrap(
+                spacing: 20,
+                runSpacing: 20,
 
-class PageBanner extends StatelessWidget {
-  final String title;
-  final String subtitle;
+                children: [
+                  SizedBox(
+                    width: 300,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
 
-  const PageBanner({
-    super.key,
-    required this.title,
-    required this.subtitle,
-  });
+                        ServiceCard(
+                          icon: Icons.cast_for_education,
+                          title: 'Learning Programmes',
+                          text: 'Explore structured learning experiences and professional development.',
+                          image: 'assets/images/service_learning.jpg',
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(
+                    width: 300,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ServiceCard(
+                          icon: Icons.groups_2_outlined,
+                          title: 'Corporate Training',
+                          text: 'Plan training opportunities around organisational needs.',
+                          image: 'assets/images/service_corporate.jpg',
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(
+                    width: 300,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ServiceCard(
+                          icon: Icons.analytics_outlined,
+                          title: 'Learning Progress',
+                          text: 'Support learning oversight and progress reporting for teams.',
+                          image: 'assets/images/service_progress.jpg',
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(
+                    width: 300,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ServiceCard(
+                          icon: Icons.devices_outlined,
+                          title: 'Digital Resources',
+                          text: 'Access digital materials that support learning and development.',
+                          image: 'assets/images/service_resources.jpg',
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [navy, blue, yellow],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
-      ),
-      child: Column(
-        children: [
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 34,
-              fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 650),
-            child: Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 15,
-                height: 1.7,
+            const SizedBox(height: 35),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: navy,
+                padding: const EdgeInsets.all(20),
+              ),
+              onPressed: () => onNavigate('Contact'),
+              child: const Text('Enquire About Training'),
+            ),
+            const SizedBox(height: 45),
+            const SiteFooter(),
+          ],
+        ),
+      );
+    }
+  }
+
+  // -------------------- LEARNING HUB --------------------
+
+  class LearningPage extends StatelessWidget {
+    final ValueChanged<String> onNavigate;
+
+    const LearningPage({super.key, required this.onNavigate});
+
+    @override
+    Widget build(BuildContext context) {
+      return SingleChildScrollView(
+        child: Column(
+        children: [
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Image.asset(
+                    'assets/images/training.jpg',
+                    width: double.infinity,
+                    height: 300,
+                    fit: BoxFit.cover,
+                  ),
+                  Container(
+                    width: double.infinity,
+                    height: 300,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.black.withOpacity(0.65),
+                          Colors.black.withOpacity(0.35),
+                        ],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Learning Hub: Learn. Apply. Grow.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        const Text(
+                          'Self-paced courses on emotional intelligence, leadership and well-being, with quizzes and certificates.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.white70,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-        ],
-      ),
-    );
+
+
+          const SizedBox(height: 30),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: CourseCatalogue(
+                cardBuilder: (course, onTap) =>
+                    CourseCard(course: course, onTap: onTap),
+              ),
+            ),
+            const SizedBox(height: 35),
+            const SiteFooter(),
+          ],
+        ),
+      );
+    }
   }
-}
 
-class SectionHeading extends StatelessWidget {
-  final String eyebrow;
-  final String title;
-  final String subtitle;
+  // -------------------- STORE --------------------
 
-  const SectionHeading({
-    super.key,
-    required this.eyebrow,
-    required this.title,
-    required this.subtitle,
-  });
+  class StorePage extends StatelessWidget {
+    final VoidCallback onCart;
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        children: [
-          Text(
-            eyebrow,
-            style: const TextStyle(
-              color: purple,
-              fontWeight: FontWeight.bold,
-              fontSize: 11,
-              letterSpacing: 2,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: navy,
-              fontWeight: FontWeight.w800,
-              fontSize: 28,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.black54, height: 1.6),
-          ),
-        ],
-      ),
-    );
-  }
-}
+    const StorePage({super.key, required this.onCart});
 
-class FeatureCard extends StatefulWidget {
-  final IconData icon;
-  final String title;
-  final String description;
-  final Color color;
-  final VoidCallback? onTap;
+    @override
+    Widget build(BuildContext context) {
+      final cart = context.watch<Cart>();
+      return SingleChildScrollView(
+        child: Column(
+          children: [
 
-  const FeatureCard({
-    super.key,
-    required this.icon,
-    required this.title,
-    required this.description,
-    required this.color,
-    this.onTap,
-  });
-
-  @override
-  State<FeatureCard> createState() => _FeatureCardState();
-}
-
-class _FeatureCardState extends State<FeatureCard> {
-  bool _hovering = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: widget.onTap == null
-          ? SystemMouseCursors.basic
-          : SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hovering = true),
-      onExit: (_) => setState(() => _hovering = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 240),
-        curve: Curves.easeOutCubic,
-        width: 285,
-        transform: Matrix4.translationValues(0, _hovering ? -7 : 0, 0),
-        child: Card(
-          elevation: _hovering ? 9 : 0,
-          shadowColor: widget.color.withValues(alpha: 0.18),
-          color: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: BorderSide(
-              color: _hovering
-                  ? widget.color.withValues(alpha: 0.35)
-                  : const Color(0xFFE7EAF2),
-            ),
-          ),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(20),
-            onTap: widget.onTap,
-            child: Padding(
-              padding: const EdgeInsets.all(23),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 240),
-                    width: 54,
-                    height: 54,
-                    decoration: BoxDecoration(
-                      color: widget.color.withValues(
-                        alpha: _hovering ? 0.18 : 0.10,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: SizedBox(
+                  height: 220,
+                  width: double.infinity,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.asset(
+                        'assets/images/resources.jpg',
+                        fit: BoxFit.cover,
                       ),
-                      borderRadius: BorderRadius.circular(_hovering ? 19 : 15),
+                      Container(
+                        color: Colors.black.withOpacity(0.5),
+                      ),
+                      Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text(
+                              'MT Alchemy Store',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Digital downloads and physical learning tools for individuals and teams.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 30),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24),
+              child: StoreCatalogue(),
+            ),
+            const SizedBox(height: 25),
+            OutlinedButton.icon(
+              onPressed: onCart,
+              icon: const Icon(Icons.shopping_cart_outlined),
+              label: Text('View Cart (${cart.count})'),
+            ),
+            const SizedBox(height: 45),
+            const SiteFooter(),
+          ],
+        ),
+      );
+    }
+  }
+
+  // -------------------- CART --------------------
+
+  class CartPage extends StatelessWidget {
+    final VoidCallback onShop;
+
+    const CartPage({super.key, required this.onShop});
+
+    @override
+    Widget build(BuildContext context) {
+      return SingleChildScrollView(
+        child: Column(
+          children: [
+            const PageBanner(
+              title: 'Your Cart',
+              subtitle: 'Review your items, then check out securely.',
+            ),
+            const SizedBox(height: 30),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 850),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: CartView(onShop: onShop),
+              ),
+            ),
+            const SizedBox(height: 45),
+            const SiteFooter(),
+          ],
+        ),
+      );
+    }
+  }
+
+  // -------------------- LOGIN PAGE --------------------
+
+
+  // -------------------- LOGIN PAGE --------------------
+
+  class LoginPage extends StatefulWidget {
+    final VoidCallback onRegister;
+    final ValueChanged<String> onLoginSuccess;
+
+    const LoginPage({
+      super.key,
+      required this.onRegister,
+      required this.onLoginSuccess,
+    });
+
+    @override
+    State<LoginPage> createState() => _LoginPageState();
+  }
+
+  class _LoginPageState extends State<LoginPage> {
+    final formKey = GlobalKey<FormState>();
+    final emailController = TextEditingController();
+    final passwordController = TextEditingController();
+
+    bool hidePassword = true;
+    bool isLoading = false;
+    String selectedRole = 'Individual';
+
+    @override
+    void dispose() {
+      emailController.dispose();
+      passwordController.dispose();
+      super.dispose();
+    }
+
+    Future<void> signIn() async {
+      if (!formKey.currentState!.validate()) return;
+
+      setState(() => isLoading = true);
+
+      try {
+        final credential = await FirebaseAuth.instance
+            .signInWithEmailAndPassword(
+          email: emailController.text.trim(),
+          password: passwordController.text,
+        );
+
+        final user = credential.user;
+        if (user == null) {
+          throw Exception('Firebase returned no signed-in user.');
+        }
+
+        final profileSnapshot = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+        if (!profileSnapshot.exists) {
+          await FirebaseAuth.instance.signOut();
+          throw Exception(
+            'Your user profile was not found in Firestore. Please contact the administrator.',
+          );
+        }
+
+        final profile = profileSnapshot.data() ?? <String, dynamic>{};
+        final role = (profile['role'] ?? '').toString().trim();
+        final status = (profile['status'] ?? 'Active').toString().trim();
+
+        if (status.toLowerCase() != 'active') {
+          await FirebaseAuth.instance.signOut();
+          throw Exception('This account is not active. Please contact the administrator.');
+        }
+
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Login successful. Welcome ${user.email ?? ''}'),
+          ),
+        );
+        widget.onLoginSuccess(
+          ['Individual', 'Employer', 'Trainer', 'Super Admin'].contains(role)
+              ? role
+              : 'Individual',
+        );
+      } on FirebaseAuthException catch (e) {
+        if (!mounted) return;
+
+        String message;
+        switch (e.code) {
+          case 'invalid-email':
+            message = 'Please enter a valid email address.';
+            break;
+          case 'user-not-found':
+          case 'invalid-credential':
+          case 'wrong-password':
+            message = 'Invalid email or password.';
+            break;
+          case 'user-disabled':
+            message = 'This account has been disabled.';
+            break;
+          case 'too-many-requests':
+            message = 'Too many attempts. Please try again later.';
+            break;
+          case 'network-request-failed':
+            message = 'Network error. Check your internet connection.';
+            break;
+          default:
+            message = e.message ?? 'Sign-in failed. Please try again.';
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
+      } catch (e) {
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
+          ),
+        );
+      } finally {
+        if (mounted) {
+          setState(() => isLoading = false);
+        }
+      }
+    }
+
+    @override
+    Widget build(BuildContext context) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Center(
+          child: Container(
+            width: 440,
+            padding: const EdgeInsets.all(30),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: const Color(0xFFE8E2D5)),
+            ),
+            child: Form(
+              key: formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Icon(
+                    Icons.lock_person_outlined,
+                    size: 55,
+                    color: purple,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Welcome Back',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 27,
+                      fontWeight: FontWeight.bold,
+                      color: navy,
                     ),
-                    child: Icon(widget.icon, color: widget.color, size: 28),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Sign in to continue your learning journey.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.black54),
+                  ),
+                  const SizedBox(height: 28),
+                  const Text('Account type'),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedRole,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'Individual',
+                        child: Text('Individual'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Employer',
+                        child: Text('Employer'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Trainer',
+                        child: Text('Trainer'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Super Admin',
+                        child: Text('Super Admin'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => selectedRole = value);
+                      }
+                    },
                   ),
                   const SizedBox(height: 18),
-                  Text(
-                    widget.title,
-                    style: const TextStyle(
-                      color: navy,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                  const Text('Email address'),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      hintText: 'you@example.com',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.email_outlined),
                     ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter your email address';
+                      }
+                      if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+                          .hasMatch(value.trim())) {
+                        return 'Please enter a valid email address';
+                      }
+                      return null;
+                    },
                   ),
-                  const SizedBox(height: 10),
-                  Text(
-                    widget.description,
-                    style: const TextStyle(
-                      color: Colors.black54,
-                      height: 1.7,
-                    ),
-                  ),
-                  if (widget.onTap != null) ...[
-                    const SizedBox(height: 15),
-                    const Row(
-                      children: [
-                        Text(
-                          'Explore',
-                          style: TextStyle(
-                            color: purple,
-                            fontWeight: FontWeight.bold,
-                          ),
+                  const SizedBox(height: 18),
+                  const Text('Password'),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: passwordController,
+                    obscureText: hidePassword,
+                    decoration: InputDecoration(
+                      hintText: 'Enter your password',
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                        onPressed: () {
+                          setState(() => hidePassword = !hidePassword);
+                        },
+                        icon: Icon(
+                          hidePassword
+                              ? Icons.visibility
+                              : Icons.visibility_off,
                         ),
-                        SizedBox(width: 6),
-                        Icon(Icons.arrow_forward, color: purple, size: 17),
-                      ],
+                      ),
                     ),
-                  ],
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your password';
+                      }
+                      if (value.length < 6) {
+                        return 'Password must be at least 6 characters';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: navy,
+                      padding: const EdgeInsets.all(18),
+                    ),
+                    onPressed: isLoading ? null : signIn,
+                    child: isLoading
+                        ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                        : const Text('Sign In'),
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text("Don't have an account?"),
+                      TextButton(
+                        onPressed: widget.onRegister,
+                        child: const Text('Create account'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 15),
+                  const Text(
+                    'Sign in securely with your MT Alchemy account.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.black54,
+                      fontSize: 12,
+                    ),
+                  ),
                 ],
               ),
             ),
           ),
         ),
-      ),
-    );
+      );
+    }
   }
-}
 
-class CourseCard extends StatefulWidget {
-  final Course course;
-  final VoidCallback onTap;
 
-  const CourseCard({
-    super.key,
-    required this.course,
-    required this.onTap,
-  });
 
-  @override
-  State<CourseCard> createState() => _CourseCardState();
-}
+  // -------------------- ROLE-BASED DASHBOARD --------------------
 
-class _CourseCardState extends State<CourseCard> {
-  bool _hovering = false;
+  class DashboardPage extends StatelessWidget {
+    final String role;
+    final ValueChanged<String> onNavigate;
+    final VoidCallback onSignOut;
 
-  @override
-  Widget build(BuildContext context) {
-    final course = widget.course;
+    const DashboardPage({
+      super.key,
+      required this.role,
+      required this.onNavigate,
+      required this.onSignOut,
+    });
 
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hovering = true),
-      onExit: (_) => setState(() => _hovering = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 240),
-        curve: Curves.easeOutCubic,
-        width: 285,
-        transform: Matrix4.translationValues(0, _hovering ? -7 : 0, 0),
-        child: Card(
-          elevation: _hovering ? 9 : 0,
-          shadowColor: course.color.withValues(alpha: 0.18),
-          color: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: BorderSide(
-              color: _hovering
-                  ? course.color.withValues(alpha: 0.35)
-                  : const Color(0xFFE5E8F0),
+    @override
+    Widget build(BuildContext context) {
+      final isAdmin = role == 'Super Admin';
+      final isEmployer = role == 'Employer';
+      final isTrainer = role == 'Trainer';
+
+      final title = isAdmin
+          ? 'Administrator Dashboard'
+          : isEmployer
+          ? 'Employer Dashboard'
+          : isTrainer
+          ? 'Trainer Dashboard'
+          : 'My Learning Dashboard';
+
+      final subtitle = isAdmin
+          ? 'Manage the MT Alchemy learning platform.'
+          : isEmployer
+          ? 'Explore learning solutions for your organisation.'
+          : isTrainer
+          ? 'Access learning resources and training tools.'
+          : 'Continue your learning and discover new resources.';
+
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1120),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(30),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [navy, blue],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: yellow.withValues(alpha: 0.45)),
+                  ),
+                  child: Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 20,
+                    runSpacing: 18,
+                    children: [
+                      SizedBox(
+                        width: 650,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'MT ALCHEMY  /  YOUR WORKSPACE',
+                              style: TextStyle(
+                                color: yellow,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.4,
+                                fontSize: 11,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            Text(
+                              title,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 30,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              subtitle,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                height: 1.6,
+                              ),
+                            ),
+                            const SizedBox(height: 18),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 13,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: yellow.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(30),
+                                border: Border.all(
+                                  color: yellow.withValues(alpha: 0.5),
+                                ),
+                              ),
+                              child: Text(
+                                'Account role: $role',
+                                style: const TextStyle(
+                                  color: yellow,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      FilledButton.icon(
+                        onPressed: onSignOut,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: yellow,
+                          foregroundColor: navy,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 16,
+                          ),
+                        ),
+                        icon: const Icon(Icons.logout_rounded),
+                        label: const Text('Sign out'),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 30),
+                RoleDashboard(role: role, onNavigate: onNavigate),
+                const SizedBox(height: 35),
+                const SiteFooter(),
+              ],
             ),
           ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 240),
-                height: 130,
-                width: double.infinity,
-                color: course.color.withValues(alpha: _hovering ? 0.17 : 0.10),
-                child: AnimatedScale(
-                  duration: const Duration(milliseconds: 240),
-                  scale: _hovering ? 1.10 : 1.0,
-                  child: Icon(course.icon, color: course.color, size: 55),
+        ),
+      );
+    }
+  }
+
+  // -------------------- CONTACT PAGE --------------------
+
+  class ContactPage extends StatefulWidget {
+    const ContactPage({super.key});
+
+    @override
+    State<ContactPage> createState() => _ContactPageState();
+  }
+
+  class _ContactPageState extends State<ContactPage> {
+    final formKey = GlobalKey<FormState>();
+    final nameController = TextEditingController();
+    final emailController = TextEditingController();
+    final phoneController = TextEditingController();
+    final organizationController = TextEditingController();
+    final messageController = TextEditingController();
+    String enquiryType = enquiryTypes.first;
+    bool sending = false;
+
+    @override
+    void dispose() {
+      nameController.dispose();
+      emailController.dispose();
+      phoneController.dispose();
+      organizationController.dispose();
+      messageController.dispose();
+      super.dispose();
+    }
+
+    Future<void> submit() async {
+      if (!formKey.currentState!.validate()) return;
+      setState(() => sending = true);
+      try {
+        await Db.addEnquiry(Enquiry(
+          name: nameController.text.trim(),
+          email: emailController.text.trim(),
+          phone: phoneController.text.trim(),
+          organization: organizationController.text.trim(),
+          type: enquiryType,
+          message: messageController.text.trim(),
+        ));
+        if (!mounted) return;
+        formKey.currentState!.reset();
+        for (final c in [
+          nameController,
+          emailController,
+          phoneController,
+          organizationController,
+          messageController,
+        ]) {
+          c.clear();
+        }
+        showSnack(context,
+            'Thank you! Your enquiry was received. Our team will contact you within 2 working days.');
+      } catch (e) {
+        if (mounted) showSnack(context, 'Sorry, the enquiry could not be sent: $e');
+      } finally {
+        if (mounted) setState(() => sending = false);
+      }
+    }
+
+    @override
+    Widget build(BuildContext context) {
+      return SingleChildScrollView(
+        child: Column(
+          children: [
+            const SizedBox(height: 24),
+            const PageBanner(
+              title: "Let's build a thriving workplace together.",
+              subtitle:
+              'Tell us about your coaching, training or partnership needs and we will get back to you.',
+            ),
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 650),
+                padding: const EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: const Color(0xFFE8E2D5)),
+                ),
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Send us an enquiry',
+                        style: TextStyle(
+                          fontSize: 25,
+                          fontWeight: FontWeight.bold,
+                          color: navy,
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+                      TextFormField(
+                        controller: nameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Full name',
+                          prefixIcon: Icon(Icons.person_outline),
+                        ),
+                        validator: (value) =>
+                        value == null || value.trim().isEmpty
+                            ? 'Please enter your name'
+                            : null,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(
+                          labelText: 'Email address',
+                          prefixIcon: Icon(Icons.email_outlined),
+                        ),
+                        validator: (value) {
+                          if (value == null ||
+                              !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+                                  .hasMatch(value.trim())) {
+                            return 'Please enter a valid email address';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: phoneController,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(
+                          labelText: 'Phone (optional)',
+                          prefixIcon: Icon(Icons.phone_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: organizationController,
+                        decoration: const InputDecoration(
+                          labelText: 'Organization (optional)',
+                          prefixIcon: Icon(Icons.business_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<String>(
+                        initialValue: enquiryType,
+                        decoration: const InputDecoration(
+                          labelText: 'Enquiry type',
+                          prefixIcon: Icon(Icons.category_outlined),
+                        ),
+                        items: [
+                          for (final t in enquiryTypes)
+                            DropdownMenuItem(value: t, child: Text(t)),
+                        ],
+                        onChanged: (v) => setState(() => enquiryType = v ?? enquiryType),
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: messageController,
+                        maxLines: 5,
+                        decoration: const InputDecoration(
+                          labelText: 'How can we help?',
+                          alignLabelWithHint: true,
+                        ),
+                        validator: (value) =>
+                        value == null || value.trim().length < 10
+                            ? 'Please enter at least 10 characters'
+                            : null,
+                      ),
+                      const SizedBox(height: 20),
+                      FilledButton(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: navy,
+                          padding: const EdgeInsets.all(18),
+                        ),
+                        onPressed: sending ? null : submit,
+                        child: Text(sending ? 'Sending…' : 'Submit Enquiry'),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.all(20),
+            ),
+            const SiteFooter(),
+          ],
+        ),
+      );
+    }
+  }
+
+  // -------------------- REUSABLE WIDGETS --------------------
+
+  class PageBanner extends StatelessWidget {
+    final String title;
+    final String subtitle;
+
+    const PageBanner({
+      super.key,
+      required this.title,
+      required this.subtitle,
+    });
+
+    @override
+    Widget build(BuildContext context) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [navy, blue, yellow],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+        ),
+        child: Column(
+          children: [
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 34,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 650),
+              child: Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 15,
+                  height: 1.7,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  class SectionHeading extends StatelessWidget {
+    final String eyebrow;
+    final String title;
+    final String subtitle;
+
+    const SectionHeading({
+      super.key,
+      required this.eyebrow,
+      required this.title,
+      required this.subtitle,
+    });
+
+    @override
+    Widget build(BuildContext context) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Column(
+          children: [
+            Text(
+              eyebrow,
+              style: const TextStyle(
+                color: purple,
+                fontWeight: FontWeight.bold,
+                fontSize: 11,
+                letterSpacing: 2,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: navy,
+                fontWeight: FontWeight.w800,
+                fontSize: 28,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.black54, height: 1.6),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  class FeatureCard extends StatefulWidget {
+    final IconData icon;
+    final String title;
+    final String description;
+    final Color color;
+    final String image;
+    final VoidCallback? onTap;
+
+    const FeatureCard({
+      super.key,
+      required this.icon,
+      required this.title,
+      required this.description,
+      required this.color,
+      this.image = 'assets/images/photo21.jpg',
+      this.onTap,
+    });
+
+    @override
+    State<FeatureCard> createState() => _FeatureCardState();
+  }
+
+  class _FeatureCardState extends State<FeatureCard> {
+    bool _hovering = false;
+
+    @override
+    Widget build(BuildContext context) {
+      return MouseRegion(
+        cursor: widget.onTap == null
+            ? SystemMouseCursors.basic
+            : SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hovering = true),
+        onExit: (_) => setState(() => _hovering = false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOutCubic,
+          width: 285,
+          transform: Matrix4.translationValues(0, _hovering ? -7 : 0, 0),
+          child: Card(
+            elevation: _hovering ? 9 : 0,
+            shadowColor: widget.color.withValues(alpha: 0.18),
+            color: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(
+                color: _hovering
+                    ? widget.color.withValues(alpha: 0.35)
+                    : const Color(0xFFE7EAF2),
+              ),
+            ),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: widget.onTap,
+              child: Padding(
+                padding: const EdgeInsets.all(23),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      course.category.toUpperCase(),
-                      style: const TextStyle(
-                        color: purple,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1,
-                        fontSize: 10,
+
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: Image.asset(
+                        widget.image,
+                        width: double.infinity,
+                        height: 150,
+                        fit: BoxFit.cover,
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 20),
+
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 240),
+                      width: 54,
+                      height: 54,
+                      decoration: BoxDecoration(
+                        color: widget.color.withValues(
+                          alpha: _hovering ? 0.18 : 0.10,
+                        ),
+                        borderRadius: BorderRadius.circular(_hovering ? 19 : 15),
+                      ),
+                      child: Icon(widget.icon, color: widget.color, size: 28),
+                    ),
+                    const SizedBox(height: 18),
                     Text(
-                      course.title,
+                      widget.title,
                       style: const TextStyle(
                         color: navy,
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 9),
+                    const SizedBox(height: 10),
                     Text(
-                      course.description,
+                      widget.description,
                       style: const TextStyle(
                         color: Colors.black54,
-                        height: 1.6,
+                        height: 1.7,
                       ),
                     ),
-                    const SizedBox(height: 14),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        onPressed: widget.onTap,
-                        child: const Text('View Course'),
+                    if (widget.onTap != null) ...[
+                      const SizedBox(height: 15),
+                      const Row(
+                        children: [
+                          Text(
+                            'Explore',
+                            style: TextStyle(
+                              color: purple,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(width: 6),
+                          Icon(Icons.arrow_forward, color: purple, size: 17),
+                        ],
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class ServiceCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String text;
-
-  const ServiceCard({
-    super.key,
-    required this.icon,
-    required this.title,
-    required this.text,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return FeatureCard(
-      icon: icon,
-      title: title,
-      description: text,
-      color: purple,
-    );
-  }
-}
-
-class SiteFooter extends StatelessWidget {
-  const SiteFooter({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      color: const Color(0xFF0D1C38),
-      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 30),
-      child: const Column(
-        children: [
-          Icon(Icons.auto_awesome, color: yellow, size: 30),
-          SizedBox(height: 12),
-          Text(
-            'MT ALCHEMY',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 2,
-              fontSize: 17,
             ),
           ),
-          SizedBox(height: 10),
-          Text(
-            'Learn • Grow • Transform',
-            style: TextStyle(color: Colors.white70),
-          ),
-          SizedBox(height: 18),
-          Text(
-            'Corporate Learning & Development Platform',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white54, fontSize: 12),
-          ),
-          SizedBox(height: 10),
-          Text(
-            '© MT Alchemy — Prototype',
-            style: TextStyle(color: Colors.white54, fontSize: 11),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class RegisterPage extends StatefulWidget {
-  final VoidCallback onLogin;
-
-  const RegisterPage({
-    super.key,
-    required this.onLogin,
-  });
-
-  @override
-  State<RegisterPage> createState() => _RegisterPageState();
-}
-
-class _RegisterPageState extends State<RegisterPage> {
-  final formKey = GlobalKey<FormState>();
-  final nameController = TextEditingController();
-  final emailController = TextEditingController();
-  final passwordController = TextEditingController();
-  final confirmPasswordController = TextEditingController();
-  final phoneController = TextEditingController();
-  final orgNameController = TextEditingController();
-  final regNoController = TextEditingController();
-  final industryController = TextEditingController();
-  final employeeCountController = TextEditingController();
-  String country = 'Malaysia';
-  final Set<String> learningAreas = {};
-
-  String selectedRole = 'Individual';
-  bool hidePassword = true;
-  bool isLoading = false;
-
-  @override
-  void dispose() {
-    nameController.dispose();
-    emailController.dispose();
-    passwordController.dispose();
-    confirmPasswordController.dispose();
-    phoneController.dispose();
-    orgNameController.dispose();
-    regNoController.dispose();
-    industryController.dispose();
-    employeeCountController.dispose();
-    super.dispose();
-  }
-
-  Future<void> register() async {
-    if (!formKey.currentState!.validate()) return;
-
-    // Public sign-up is limited to non-administrator roles.
-    const allowedRegistrationRoles = <String>{
-      'Individual',
-      'Employer',
-      'Trainer',
-    };
-    if (!allowedRegistrationRoles.contains(selectedRole)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Super Admin accounts must be provisioned by an administrator.'),
         ),
       );
-      return;
-    }
-
-    setState(() => isLoading = true);
-
-    try {
-      final credential = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(
-        email: emailController.text.trim(),
-        password: passwordController.text,
-      );
-
-      final user = credential.user;
-
-      if (user != null) {
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .set({
-          'uid': user.uid,
-          'name': nameController.text.trim(),
-          'email': emailController.text.trim(),
-          'role': selectedRole,
-          'status': 'Active',
-          'phone': phoneController.text.trim(),
-          'country': country,
-          'learningAreas': learningAreas.toList(),
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-
-        // Employer accounts also create their organisation profile.
-        if (selectedRole == 'Employer') {
-          await Db.saveOrganization(Organization(
-            id: user.uid,
-            name: orgNameController.text.trim(),
-            registrationNo: regNoController.text.trim(),
-            industry: industryController.text.trim(),
-            employeeCount: int.tryParse(employeeCountController.text.trim()) ?? 0,
-            contactPerson: nameController.text.trim(),
-            email: emailController.text.trim(),
-            phone: phoneController.text.trim(),
-          ));
-        }
-
-        await user.updateDisplayName(nameController.text.trim());
-      }
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Account created successfully! You can now sign in.'),
-        ),
-      );
-
-      await navigateToLogin();
-    } on FirebaseAuthException catch (e) {
-      if (!mounted) return;
-
-      String message;
-      switch (e.code) {
-        case 'email-already-in-use':
-          message = 'This email is already registered. Please sign in.';
-          break;
-        case 'invalid-email':
-          message = 'Please enter a valid email address.';
-          break;
-        case 'weak-password':
-          message = 'Choose a stronger password.';
-          break;
-        default:
-          message = e.message ?? 'Registration failed.';
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
-    } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'The account may have been created, but saving the profile failed. Check Firestore rules and try again.',
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => isLoading = false);
     }
   }
+  String courseImage(String category) {
+    switch (category) {
+      case 'Emotional Intelligence':
+        return 'assets/images/photo5.jpg';
+      case 'Mindfulness':
+        return 'assets/images/photo6.jpg';
+      case 'Leadership':
+        return 'assets/images/photo7.jpg';
+      case 'Communication':
+        return 'assets/images/photo8.jpg';
+      case 'Team Effectiveness':
+        return 'assets/images/photo9.jpg';
+      case 'Workplace Well-being':
+        return 'assets/images/photo10.jpg';
+      case 'Personal Development':
+        return 'assets/images/photo11.jpg';
+      case 'Organizational Development':
+        return 'assets/images/photo12.jpg';
+      default:
+        return 'assets/images/learning.jpg';
+    }
+  }
+  class CourseCard extends StatefulWidget {
+    final Course course;
+    final VoidCallback onTap;
 
+    const CourseCard({
+      super.key,
+      required this.course,
+      required this.onTap,
+    });
 
-
-
-
-  Future<void> navigateToLogin() async {
-    // Firebase automatically signs in the user after account creation.
-    // Sign out so they can use the Sign In page normally.
-    await FirebaseAuth.instance.signOut();
-
-    if (!mounted) return;
-    widget.onLogin();
+    @override
+    State<CourseCard> createState() => _CourseCardState();
   }
 
+  class _CourseCardState extends State<CourseCard> {
+    bool _hovering = false;
 
+    @override
+    Widget build(BuildContext context) {
+      final course = widget.course;
 
-
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 480),
-          padding: const EdgeInsets.all(30),
-          decoration: BoxDecoration(
+      return MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hovering = true),
+        onExit: (_) => setState(() => _hovering = false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOutCubic,
+          width: 285,
+          transform: Matrix4.translationValues(0, _hovering ? -7 : 0, 0),
+          child: Card(
+            elevation: _hovering ? 9 : 0,
+            shadowColor: course.color.withValues(alpha: 0.18),
             color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFFE8E2D5)),
-          ),
-          child: Form(
-            key: formKey,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(
+                color: _hovering
+                    ? course.color.withValues(alpha: 0.35)
+                    : const Color(0xFFE5E8F0),
+              ),
+            ),
+            clipBehavior: Clip.antiAlias,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(
-                  Icons.person_add_alt_1,
-                  size: 52,
-                  color: purple,
-                ),
-                const SizedBox(height: 14),
-                const Text(
-                  'Create Your Account',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: navy,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Join MT Alchemy and start your learning journey.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.black54),
-                ),
-                const SizedBox(height: 24),
-                const Text('Full name'),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: nameController,
-                  decoration: InputDecoration(
-                    hintText: 'Enter your full name',
-                    prefixIcon: const Icon(Icons.person_outline),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFFE2DED4)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(
-                        color: yellow,
-                        width: 2,
-                      ),
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter your full name';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                const Text('Account type'),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  initialValue: selectedRole,
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFFE2DED4)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(
-                        color: yellow,
-                        width: 2,
-                      ),
-                    ),
-                  ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'Individual',
-                      child: Text('Individual'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'Employer',
-                      child: Text('Employer'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'Trainer',
-                      child: Text('Trainer'),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() => selectedRole = value);
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: phoneController,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                    labelText: 'Phone',
-                    prefixIcon: Icon(Icons.phone_outlined),
-                  ),
-                  validator: (v) => RegExp(r'^[0-9+\-\s]{8,15}$').hasMatch((v ?? '').trim())
-                      ? null
-                      : 'Enter a valid phone number',
-                ),
-                if (selectedRole == 'Individual') ...[
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    initialValue: country,
-                    decoration: const InputDecoration(labelText: 'Country'),
-                    items: [
-                      for (final c in const ['Malaysia', 'Singapore', 'Indonesia', 'Thailand', 'Other'])
-                        DropdownMenuItem(value: c, child: Text(c)),
-                    ],
-                    onChanged: (v) => setState(() => country = v ?? country),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text('Preferred learning areas'),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      for (final area in courseCategories.take(6))
-                        FilterChip(
-                          label: Text(area),
-                          selected: learningAreas.contains(area),
-                          onSelected: (on) => setState(() =>
-                              on ? learningAreas.add(area) : learningAreas.remove(area)),
-                        ),
-                    ],
-                  ),
-                ],
-                if (selectedRole == 'Employer') ...[
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: orgNameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Organization name',
-                      prefixIcon: Icon(Icons.business_outlined),
-                    ),
-                    validator: (v) => (v ?? '').trim().isEmpty ? 'Required for employers' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: regNoController,
-                    decoration: const InputDecoration(labelText: 'Company registration no.'),
-                    validator: (v) => (v ?? '').trim().isEmpty ? 'Required for employers' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  Row(children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: industryController,
-                        decoration: const InputDecoration(labelText: 'Industry'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextFormField(
-                        controller: employeeCountController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'No. of employees'),
-                        validator: (v) => (v ?? '').isEmpty || int.tryParse(v!) != null
-                            ? null
-                            : 'Numbers only',
-                      ),
-                    ),
-                  ]),
-                ],
-                const SizedBox(height: 16),
-                const Text('Email address'),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    hintText: 'you@example.com',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.email_outlined),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter your email';
-                    }
-                    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
-                        .hasMatch(value.trim())) {
-                      return 'Enter a valid email address';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                const Text('Password'),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: passwordController,
-                  obscureText: hidePassword,
-                  decoration: InputDecoration(
-                    hintText: 'At least 6 characters',
-                    border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    suffixIcon: IconButton(
-                      onPressed: () {
-                        setState(() => hidePassword = !hidePassword);
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 240),
+                  height: 160,
+                  width: double.infinity,
+                  color: course.color.withValues(alpha: 0.10),
+                  child: AnimatedScale(
+                    duration: const Duration(milliseconds: 240),
+                    scale: _hovering ? 1.10 : 1.0,
+                    child: Image.asset(
+                      courseImage(course.category),
+                      width: double.infinity,
+                      height: 160,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Icon(course.icon, color: course.color, size: 55);
                       },
-                      icon: Icon(
-                        hidePassword
-                            ? Icons.visibility
-                            : Icons.visibility_off,
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        course.category.toUpperCase(),
+                        style: const TextStyle(
+                          color: purple,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1,
+                          fontSize: 10,
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 10),
+                      Text(
+                        course.title,
+                        style: const TextStyle(
+                          color: navy,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 9),
+                      Text(
+                        course.description,
+                        style: const TextStyle(
+                          color: Colors.black54,
+                          height: 1.6,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: widget.onTap,
+                          child: const Text('View Course'),
+                        ),
+                      ),
+                    ],
                   ),
-                  validator: (value) {
-                    if (value == null || value.length < 6) {
-                      return 'Password must be at least 6 characters';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                const Text('Confirm password'),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: confirmPasswordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    hintText: 'Re-enter your password',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.lock_reset),
-                  ),
-                  validator: (value) {
-                    if (value != passwordController.text) {
-                      return 'Passwords do not match';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 24),
-                FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: navy,
-                    padding: const EdgeInsets.all(18),
-                  ),
-                  onPressed: isLoading ? null : register,
-                  child: isLoading
-                      ? const SizedBox(
-                    height: 22,
-                    width: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                      : const Text('Create Account'),
                 ),
               ],
             ),
           ),
         ),
-      ),
-    );
+      );
+    }
   }
-}
+
+  class ServiceCard extends StatelessWidget {
+    final IconData icon;
+    final String title;
+    final String text;
+    final String image;
+    const ServiceCard({
+      super.key,
+      required this.icon,
+      required this.title,
+      required this.text,
+      required this.image,
+    });
+
+    @override
+    Widget build(BuildContext context) {
+      return FeatureCard(
+        icon: icon,
+        title: title,
+        description: text,
+        color: purple,
+        image: image,
+      );
+    }
+  }
+
+  class SiteFooter extends StatelessWidget {
+    const SiteFooter({super.key});
+
+    @override
+    Widget build(BuildContext context) {
+      return Container(
+        width: double.infinity,
+        color: const Color(0xFF0D1C38),
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 30),
+        child: const Column(
+          children: [
+            Icon(Icons.auto_awesome, color: yellow, size: 30),
+            SizedBox(height: 12),
+            Text(
+              'MT ALCHEMY',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 2,
+                fontSize: 17,
+              ),
+            ),
+            SizedBox(height: 10),
+            Text(
+              'Learn • Grow • Transform',
+              style: TextStyle(color: Colors.white70),
+            ),
+            SizedBox(height: 18),
+            Text(
+              'Corporate Learning & Development Platform',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white54, fontSize: 12),
+            ),
+            SizedBox(height: 10),
+            Text(
+              '© MT Alchemy — Prototype',
+              style: TextStyle(color: Colors.white54, fontSize: 11),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  class RegisterPage extends StatefulWidget {
+    final VoidCallback onLogin;
+
+    const RegisterPage({
+      super.key,
+      required this.onLogin,
+    });
+
+    @override
+    State<RegisterPage> createState() => _RegisterPageState();
+  }
+
+  class _RegisterPageState extends State<RegisterPage> {
+    final formKey = GlobalKey<FormState>();
+    final nameController = TextEditingController();
+    final emailController = TextEditingController();
+    final passwordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+    final phoneController = TextEditingController();
+    final orgNameController = TextEditingController();
+    final regNoController = TextEditingController();
+    final industryController = TextEditingController();
+    final employeeCountController = TextEditingController();
+    String country = 'Malaysia';
+    final Set<String> learningAreas = {};
+
+    String selectedRole = 'Individual';
+    bool hidePassword = true;
+    bool isLoading = false;
+
+    @override
+    void dispose() {
+      nameController.dispose();
+      emailController.dispose();
+      passwordController.dispose();
+      confirmPasswordController.dispose();
+      phoneController.dispose();
+      orgNameController.dispose();
+      regNoController.dispose();
+      industryController.dispose();
+      employeeCountController.dispose();
+      super.dispose();
+    }
+
+    Future<void> register() async {
+      if (!formKey.currentState!.validate()) return;
+
+      // Public sign-up is limited to non-administrator roles.
+      const allowedRegistrationRoles = <String>{
+        'Individual',
+        'Employer',
+        'Trainer',
+      };
+      if (!allowedRegistrationRoles.contains(selectedRole)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Super Admin accounts must be provisioned by an administrator.'),
+          ),
+        );
+        return;
+      }
+
+      setState(() => isLoading = true);
+
+      try {
+        final credential = await FirebaseAuth.instance
+            .createUserWithEmailAndPassword(
+          email: emailController.text.trim(),
+          password: passwordController.text,
+        );
+
+        final user = credential.user;
+
+        if (user != null) {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .set({
+            'uid': user.uid,
+            'name': nameController.text.trim(),
+            'email': emailController.text.trim(),
+            'role': selectedRole,
+            'status': 'Active',
+            'phone': phoneController.text.trim(),
+            'country': country,
+            'learningAreas': learningAreas.toList(),
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+
+          // Employer accounts also create their organisation profile.
+          if (selectedRole == 'Employer') {
+            await Db.saveOrganization(Organization(
+              id: user.uid,
+              name: orgNameController.text.trim(),
+              registrationNo: regNoController.text.trim(),
+              industry: industryController.text.trim(),
+              employeeCount: int.tryParse(employeeCountController.text.trim()) ?? 0,
+              contactPerson: nameController.text.trim(),
+              email: emailController.text.trim(),
+              phone: phoneController.text.trim(),
+            ));
+          }
+
+          await user.updateDisplayName(nameController.text.trim());
+        }
+
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Account created successfully! You can now sign in.'),
+          ),
+        );
+
+        await navigateToLogin();
+      } on FirebaseAuthException catch (e) {
+        if (!mounted) return;
+
+        String message;
+        switch (e.code) {
+          case 'email-already-in-use':
+            message = 'This email is already registered. Please sign in.';
+            break;
+          case 'invalid-email':
+            message = 'Please enter a valid email address.';
+            break;
+          case 'weak-password':
+            message = 'Choose a stronger password.';
+            break;
+          default:
+            message = e.message ?? 'Registration failed.';
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
+      } catch (e) {
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'The account may have been created, but saving the profile failed. Check Firestore rules and try again.',
+            ),
+          ),
+        );
+      } finally {
+        if (mounted) setState(() => isLoading = false);
+      }
+    }
+
+
+
+
+
+    Future<void> navigateToLogin() async {
+      // Firebase automatically signs in the user after account creation.
+      // Sign out so they can use the Sign In page normally.
+      await FirebaseAuth.instance.signOut();
+
+      if (!mounted) return;
+      widget.onLogin();
+    }
+
+
+
+
+
+    @override
+    Widget build(BuildContext context) {
+      return Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 480),
+            padding: const EdgeInsets.all(30),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: const Color(0xFFE8E2D5)),
+            ),
+            child: Form(
+              key: formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Icon(
+                    Icons.person_add_alt_1,
+                    size: 52,
+                    color: purple,
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'Create Your Account',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                      color: navy,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Join MT Alchemy and start your learning journey.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.black54),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text('Full name'),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: nameController,
+                    decoration: InputDecoration(
+                      hintText: 'Enter your full name',
+                      prefixIcon: const Icon(Icons.person_outline),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFE2DED4)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                          color: yellow,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter your full name';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Account type'),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedRole,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFE2DED4)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                          color: yellow,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'Individual',
+                        child: Text('Individual'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Employer',
+                        child: Text('Employer'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Trainer',
+                        child: Text('Trainer'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => selectedRole = value);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Phone',
+                      prefixIcon: Icon(Icons.phone_outlined),
+                    ),
+                    validator: (v) => RegExp(r'^[0-9+\-\s]{8,15}$').hasMatch((v ?? '').trim())
+                        ? null
+                        : 'Enter a valid phone number',
+                  ),
+                  if (selectedRole == 'Individual') ...[
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      initialValue: country,
+                      decoration: const InputDecoration(labelText: 'Country'),
+                      items: [
+                        for (final c in const ['Malaysia', 'Singapore', 'Indonesia', 'Thailand', 'Other'])
+                          DropdownMenuItem(value: c, child: Text(c)),
+                      ],
+                      onChanged: (v) => setState(() => country = v ?? country),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text('Preferred learning areas'),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        for (final area in courseCategories.take(6))
+                          FilterChip(
+                            label: Text(area),
+                            selected: learningAreas.contains(area),
+                            onSelected: (on) => setState(() =>
+                                on ? learningAreas.add(area) : learningAreas.remove(area)),
+                          ),
+                      ],
+                    ),
+                  ],
+                  if (selectedRole == 'Employer') ...[
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: orgNameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Organization name',
+                        prefixIcon: Icon(Icons.business_outlined),
+                      ),
+                      validator: (v) => (v ?? '').trim().isEmpty ? 'Required for employers' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: regNoController,
+                      decoration: const InputDecoration(labelText: 'Company registration no.'),
+                      validator: (v) => (v ?? '').trim().isEmpty ? 'Required for employers' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    Row(children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: industryController,
+                          decoration: const InputDecoration(labelText: 'Industry'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextFormField(
+                          controller: employeeCountController,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(labelText: 'No. of employees'),
+                          validator: (v) => (v ?? '').isEmpty || int.tryParse(v!) != null
+                              ? null
+                              : 'Numbers only',
+                        ),
+                      ),
+                    ]),
+                  ],
+                  const SizedBox(height: 16),
+                  const Text('Email address'),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      hintText: 'you@example.com',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.email_outlined),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter your email';
+                      }
+                      if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+                          .hasMatch(value.trim())) {
+                        return 'Enter a valid email address';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Password'),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: passwordController,
+                    obscureText: hidePassword,
+                    decoration: InputDecoration(
+                      hintText: 'At least 6 characters',
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                        onPressed: () {
+                          setState(() => hidePassword = !hidePassword);
+                        },
+                        icon: Icon(
+                          hidePassword
+                              ? Icons.visibility
+                              : Icons.visibility_off,
+                        ),
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.length < 6) {
+                        return 'Password must be at least 6 characters';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Confirm password'),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: confirmPasswordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      hintText: 'Re-enter your password',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.lock_reset),
+                    ),
+                    validator: (value) {
+                      if (value != passwordController.text) {
+                        return 'Passwords do not match';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: navy,
+                      padding: const EdgeInsets.all(18),
+                    ),
+                    onPressed: isLoading ? null : register,
+                    child: isLoading
+                        ? const SizedBox(
+                      height: 22,
+                      width: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                        : const Text('Create Account'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+  }
